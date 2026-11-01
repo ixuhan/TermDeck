@@ -50,7 +50,9 @@ copy /y "LICENSE" "%STAGE%\LICENSE" >nul
 
 echo.
 echo [termdeck] [3/3] zipping
-tar -a -c -f "release\TermDeck-%VER%-portable.zip" -C release "TermDeck-%VER%-portable"
+rem bsdtar stores zip members uncompressed by default (an 8.5 MB exe stays
+rem 8.5 MB). Compress-Archive deflates, same as the CI workflow (3.4 MB).
+powershell -NoProfile -Command "Compress-Archive -Path 'release\TermDeck-%VER%-portable' -DestinationPath 'release\TermDeck-%VER%-portable.zip' -Force"
 if errorlevel 1 (
   echo [termdeck] zip failed
   exit /b 1

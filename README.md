@@ -4,7 +4,21 @@
 
 ![TermDeck 主界面](docs/images/hero.png)
 
-底层是 Rust + ConPTY，界面用 WebView2 渲染 `xterm`，安装包不到 10 MB，常驻不占 CPU。
+底层是 Rust + ConPTY，界面用 WebView2 渲染 `xterm`，安装包 2.7 MB，常驻不占 CPU。
+
+## 下载
+
+到 [Releases](https://github.com/ixuhan/TermDeck/releases/latest) 取最新版，两个文件挑一个：
+
+| 文件 | 说明 |
+| --- | --- |
+| `TermDeck_x.y.z_x64-setup.exe` | 安装版，带开始菜单和卸载项，**推荐** |
+| `TermDeck-x.y.z-portable.zip` | 便携版，解压即用，数据跟着文件夹走 |
+
+要求 Windows 10 / 11 x64。Win11 自带 WebView2；Win10 如果没装过，安装包会提示并引导下载。
+
+便携版解压后双击 `TermDeck.exe`，首次运行会在同级目录创建 `data\`（历史、配置、日志都在这儿）。
+整个文件夹拷走就是迁移，删掉 `data\` 就是恢复出厂。
 
 ---
 
