@@ -192,6 +192,15 @@ node scripts\shot.mjs
 | 6 | 窗口全白，进程却在跑 | 用 `cargo build` 代替 `tauri build`，缺 `custom-protocol` feature，二进制仍指向 devUrl | 一律用 `scripts\build.bat` |
 | 7 | 窗口白屏且日志只有 `app starting` | Win10 缺 WebView2 运行时 | 装 [WebView2 Evergreen](https://developer.microsoft.com/microsoft-edge/webview2/) |
 | 8 | `.bat` 报「不是内部或外部命令」且引号错乱 | 用 UTF-8 中文写了 `.bat` 注释，cmd 按 OEM 代码页解析 | `.bat` 保持纯 ASCII |
+| 9 | `error: cached cgu ... should have an object file, but doesn't` | 增量编译缓存损坏，常见于杀毒扫描或进程被强杀 | 删掉 `src-tauri\target\release\incremental` 后重试；频繁出现可设 `CARGO_INCREMENTAL=0` |
+
+---
+
+## 关于增量编译
+
+release 构建默认开启增量编译，重复构建只需十几秒。但这个缓存对文件锁和杀毒扫描很敏感，
+偶发 `拒绝访问 (os error 5)` 或上面的 `cached cgu` 报错。此时删掉 `target\release\incremental`
+重建即可，不会影响已编译的依赖。
 
 ---
 
