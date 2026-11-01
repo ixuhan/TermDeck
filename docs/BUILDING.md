@@ -121,8 +121,18 @@ Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Lib"
 
 ```powershell
 cd D:\Projects\TermDeck
-scripts\build.bat        # 生产构建
-scripts\run.bat          # 启动
+scripts\build.bat          # 生产构建（exe）
+scripts\build.bat --bundle # 生产构建 + NSIS 安装包
+scripts\run.bat            # 启动已构建的 exe
+scripts\release.bat        # 直接产出便携 zip
+```
+
+构建相关辅助脚本：
+
+```powershell
+scripts\kill-build.bat     # 清理中断构建残留的进程，释放 target 锁
+scripts\clean.bat          # 清增量缓存（保留依赖）
+scripts\clean.bat --full   # 清整个 target
 ```
 
 开发模式（前端热更新）：
@@ -196,11 +206,59 @@ node scripts\shot.mjs
 
 ---
 
-## 关于增量编译
+## 构建为什么慢，怎么变快
 
-release 构建默认开启增量编译，重复构建只需十几秒。但这个缓存对文件锁和杀毒扫描很敏感，
-偶发 `拒绝访问 (os error 5)` 或上面的 `cached cgu` 报错。此时删掉 `target\release\incremental`
-重建即可，不会影响已编译的依赖。
+如果一次改动要等 3-8 分钟，通常是下面三件事之一。
+
+### 1. `Blocking waiting for file lock on build directory`
+
+不是卡死，是**排队**。cargo 对 `target\.cargo-lock` 加独占锁，第二个构建不会失败，
+只会一直打印这一行，直到第一个构建结束。真实来源通常是：
+
+- 上一个构建还没跑完（或被中断后进程没退干净）
+- 同时开了两个终端各跑一次
+- 编辑器插件在后台跑 `cargo check`，持有同一把锁
+
+```powershell
+scripts\kill-build.bat    # 清掉残留的 cargo / rustc，释放锁
+```
+
+`scripts\build.bat` 现在会在启动前检测已有 cargo 进程并直接退出，不会再干等。
+
+### 2. 每次都要重编整个 `termdeck(bin)`
+
+原来 release profile 开了 `lto = "thin"`。thin LTO 每次构建都要把所有依赖的
+codegen unit 重新过一遍，于是改一行前端代码也要重编 400 多个单元。
+终端应用的瓶颈在 PTY I/O 和渲染，不在指令数，所以现在默认 `lto = false`：
+
+```toml
+[profile.release]
+lto = false
+codegen-units = 16
+```
+
+需要极致体积时单次覆盖即可，不用改文件 —— 在 PowerShell 里设环境变量
+`CARGO_PROFILE_RELEASE_LTO=thin` 再跑 `scripts\build.bat`。
+
+### 3. 用错了构建方式
+
+日常改 UI **不要**跑 release 构建。`scripts\dev.bat`（`tauri dev`）带热更新，
+前端改动秒级生效，只有 Rust 侧改动才需要重编。
+
+真正需要出包时再跑 `scripts\build.bat`。
+
+### 关于增量缓存
+
+release 构建默认开启增量编译，重建只需十几秒。这个缓存对文件锁敏感，
+偶发 `os error 5` 或 `cached cgu ... should have an object file`。此时：
+
+```powershell
+scripts\clean.bat          # 只清 incremental，保留已编译依赖
+scripts\clean.bat --full   # 清整个 target，下次全量重编
+```
+
+> **不要删 `target\release\deps\termdeck.*`。** 删掉会强制整个 app crate 全量重编，
+> 那正是「每次都要等好几分钟」的元凶之一。
 
 ---
 

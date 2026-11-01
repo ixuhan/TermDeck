@@ -66,14 +66,19 @@ failed to bundle project: `CONNECT proxy failed: proxy server responded 502/502`
 ### 用法
 
 ```bat
-git tag v0.2.0
-git push origin v0.2.0
+git tag -a v0.3.0 -m "TermDeck v0.3.0"
+git push origin v0.3.0
 ```
 
-推 tag 后自动触发：构建 → 跑 Rust 单元测试 → 打包 NSIS 安装包 → 生成**草稿 Release** →
-再补一个便携版 zip 传上去。到仓库的 Releases 页面检查无误后点 Publish 即可。
+推 tag 后自动触发：构建 → 跑 Rust 单元测试 → 打包 NSIS 安装包 → **直接发布正式 Release** →
+再补一个便携版 zip 传上去。全程无需本地 token，也不用再去网页点 Publish，
+几分钟后 `https://github.com/<owner>/<repo>/releases/latest` 就能直接下载。
 
-也可以在 Actions 页面手动 `Run workflow` 触发（不会创建 Release，只验证构建）。
+> 为什么发版走 CI 而不是本机：Tauri 打 NSIS 安装包时，`tauri-bundler` 会临时去
+> `github.com` 下载 NSIS 工具链。如果本机访问不了 GitHub Releases 的二进制，
+> 这一步会失败（exe 本身是好的，只缺安装器外壳）。CI 里没有这个限制。
+
+也可以在 Actions 页面手动 `Run workflow` 触发（同样会创建 Release，可用于重跑失败的发版）。
 
 ### workflow 做了哪些事
 
@@ -85,7 +90,8 @@ windows-latest 上：
   → 组装便携版 zip 并上传到同一个 Release
 ```
 
-Release 说明里带了 CHANGELOG 链接，草稿状态是为了让你先验收再发布。
+Release 说明里带了 CHANGELOG 链接和下载指引。发布是立即生效的，
+如果想先验收再上架，把 workflow 里的 `releaseDraft` 改成 `true` 即可。
 
 ---
 
