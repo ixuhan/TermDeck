@@ -43,10 +43,23 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: TermDeck ${{ github.ref_name }}
           releaseBody: |
-            详细改动见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/docs/CHANGELOG.md)。
+            Windows 增强型工作流终端。详细改动见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/docs/CHANGELOG.md)。
 
-            下载 `*_x64-setup.exe` 安装，或下载 `*_x64_en-US.msi` 走 MSI 安装。
-          releaseDraft: true
+            ## 下载哪个
+
+            | 文件 | 说明 |
+            |---|---|
+            | `TermDeck_*_x64-setup.exe` | 安装版，带开始菜单与卸载项，推荐 |
+            | `TermDeck-*-portable.zip` | 便携版，解压即用，数据跟着文件夹走 |
+
+            ## 系统要求
+
+            - Windows 10 / 11 x64
+            - WebView2 运行时（Win11 自带；Win10 若未安装，安装包会自动提示并引导下载）
+
+            便携版解压后双击 `TermDeck.exe` 即可，首次运行会在同级目录创建 `data\`，
+            历史、配置、日志都在里面；整个文件夹拷走就是迁移，删掉 `data\` 就是恢复出厂。
+          releaseDraft: false
           prerelease: false
 
       - name: Package portable zip

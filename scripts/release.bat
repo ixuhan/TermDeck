@@ -14,6 +14,8 @@ rem  NOTE: keep this file ASCII-only. cmd.exe reads .bat in the OEM codepage and
 rem  mangles UTF-8 comments.
 rem ============================================================================
 setlocal
+call "%~dp0_guard.bat"
+if errorlevel 1 exit /b 1
 call "%~dp0_env.bat"
 if errorlevel 1 exit /b 1
 cd /d "%~dp0.."

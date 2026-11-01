@@ -24,8 +24,13 @@ anyhow = "1"
 uuid = { version = "1", features = ["v4"] }
 
 [profile.release]
-# thin LTO + 并行 codegen：编译时间约为 full LTO 的 1/3，产物略大但启动无感。
+# No LTO on purpose. Thin LTO re-processes every dependency's codegen units on
+# each build, which is what made a one-line frontend change cost 3-8 minutes.
+# For a terminal the bottleneck is PTY I/O and rendering, not instruction count,
+# so the trade (slightly larger binary, much faster rebuilds) is the right one.
+# Need a squeezed binary for a real release? Override per build:
+#   CARGO_PROFILE_RELEASE_LTO=thin scripts\build.bat
+lto = false
 codegen-units = 16
-lto = "thin"
 opt-level = "s"
 strip = true
