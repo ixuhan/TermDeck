@@ -137,6 +137,18 @@ pub fn history_clear(app_state: State<'_, AppState>, session_id: String) -> Resu
 }
 
 #[tauri::command]
+pub fn history_recent(
+    app_state: State<'_, AppState>,
+    session_id: String,
+    limit: Option<usize>,
+) -> Result<Vec<String>, String> {
+    app_state
+        .history
+        .recent(&session_id, limit.unwrap_or(100))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn history_commands(
     app_state: State<'_, AppState>,
     session_id: String,

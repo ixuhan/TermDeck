@@ -83,6 +83,16 @@ try {
   logs.push(`REAL_ADOPTED=[${await input.inputValue()}]`);
   await input.fill("");
 
+  // Bare ArrowUp must pull the last command straight from SQLite.
+  await page.keyboard.press("ArrowUp");
+  await wait(600);
+  const recalled = await input.inputValue();
+  logs.push(`REAL_HISTORY_UP=[${recalled}]`);
+  await page.keyboard.press("ArrowDown");
+  await wait(300);
+  logs.push(`REAL_HISTORY_DOWN=[${await input.inputValue()}]`);
+  await input.fill("");
+
   logs.push(`SESSIONS=${await page.locator(".session-item").count()}`);
 
   // Settings panel

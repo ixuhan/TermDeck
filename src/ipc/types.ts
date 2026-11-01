@@ -60,6 +60,8 @@ export interface Ipc {
   ): Promise<void>;
   historyPrefix(sessionId: string, prefix: string): Promise<string | null>;
   historySearch(sessionId: string, query: string, limit: number): Promise<HistoryItem[]>;
+  /** Commands of one session ordered by recency, for ↑/↓ browsing. */
+  historyRecent(sessionId: string, limit: number): Promise<string[]>;
   historyClear(sessionId: string): Promise<void>;
 
   workspaceLoad(): Promise<PersistedWorkspace | null>;

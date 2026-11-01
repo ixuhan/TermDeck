@@ -319,6 +319,15 @@ export function createMockIpc(): Ipc {
       return scored.slice(0, limit);
     },
 
+    async historyRecent(sessionId, limit) {
+      ensureSeed(sessionId);
+      const list = history.get(sessionId) ?? [];
+      return [...list]
+        .sort((a, b) => b.executedAt - a.executedAt)
+        .slice(0, limit)
+        .map((h) => h.command);
+    },
+
     async historyClear(sessionId) {
       history.set(sessionId, []);
     },

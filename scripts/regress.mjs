@@ -136,6 +136,35 @@ await page.screenshot({ path: "shots/r11-statusbar.png" });
 const lazyPanes = await page.locator(".lazy-pane").count();
 logs.push(`INFO lazy panes = ${lazyPanes}`);
 
+// ---- #13 bare ↑/↓ browses command history -------------------------------
+await input.click();
+await input.fill("");
+await input.type("echo up-one", { delay: 15 });
+await page.keyboard.press("Enter");
+await wait(700);
+await input.type("echo up-two", { delay: 15 });
+await page.keyboard.press("Enter");
+await wait(700);
+
+await page.keyboard.press("ArrowUp");
+await wait(400);
+const up1 = await input.inputValue();
+await page.keyboard.press("ArrowUp");
+await wait(250);
+const up2 = await input.inputValue();
+await page.keyboard.press("ArrowDown");
+await wait(250);
+const down1 = await input.inputValue();
+await page.keyboard.press("ArrowDown");
+await wait(250);
+const down2 = await input.inputValue();
+
+ok("#13a ArrowUp loads newest", up1 === "echo up-two", up1);
+ok("#13b ArrowUp steps older", up2 === "echo up-one", up2);
+ok("#13c ArrowDown steps newer", down1 === "echo up-two", down1);
+ok("#13d ArrowDown restores draft", down2 === "", `[${down2}]`);
+await page.screenshot({ path: "shots/r13-history-nav.png" });
+
 const fails = logs.filter((l) => l.startsWith("FAIL") || l.startsWith("[pageerror]"));
 console.log(logs.join("\n"));
 console.log(`\n==== ${logs.filter((l) => l.startsWith("PASS")).length} passed, ${fails.length} failed ====`);

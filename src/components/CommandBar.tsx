@@ -14,11 +14,16 @@ export function CommandBar({ session }: { session: Session }) {
   const [paletteOpen, setPaletteOpenState] = useState(false);
   const [paletteItems, setPaletteItems] = useState<HistoryItem[]>([]);
   const [paletteIndex, setPaletteIndex] = useState(0);
+  // ↑/↓ browsing: null means "not browsing", so the draft line is safe.
+  const [histIndex, setHistIndex] = useState<number | null>(null);
 
   const taRef = useRef<HTMLTextAreaElement>(null);
   const endMarkRef = useRef<HTMLSpanElement>(null);
   const seqRef = useRef(0);
   const backupRef = useRef("");
+  const histListRef = useRef<string[]>([]);
+  const histDraftRef = useRef("");
+  const histLoadingRef = useRef(false);
   // Only consumed when the rendered value actually matches the text we intended
   // to place the caret in; otherwise a leftover entry would yank the caret back
   // while the user is already typing.
@@ -103,6 +108,43 @@ export function CommandBar({ session }: { session: Session }) {
     if (mark) setGhostPos({ left: mark.offsetLeft, top: mark.offsetTop });
   }, [value, ghost]);
 
+  /**
+   * Shell-style history browsing. ↑ walks back through the session's commands
+   * (newest first), ↓ walks forward, and stepping past the newest restores
+   * whatever was typed before browsing started.
+   */
+  const navigateHistory = useCallback(
+    // dir = 1 walks to older entries, dir = -1 walks back towards the draft.
+    async (dir: 1 | -1) => {
+      if (histIndex === null) {
+        if (dir === -1 || histLoadingRef.current) return;
+        histLoadingRef.current = true;
+        try {
+          const list = await ipc.historyRecent(session.key, 100);
+          if (list.length === 0) return;
+          histListRef.current = list;
+          histDraftRef.current = value;
+          setHistIndex(0);
+          applyValue(list[0]);
+        } finally {
+          histLoadingRef.current = false;
+        }
+        return;
+      }
+      const next = histIndex + dir;
+      if (next < 0) {
+        // Walked past the newest entry: restore whatever the user had typed.
+        setHistIndex(null);
+        applyValue(histDraftRef.current);
+        return;
+      }
+      if (next >= histListRef.current.length) return;
+      setHistIndex(next);
+      applyValue(histListRef.current[next]);
+    },
+    [histIndex, session.key, value, applyValue],
+  );
+
   useEffect(() => {
     ui.focusCommand = () => {
       const ta = taRef.current;
@@ -125,6 +167,7 @@ export function CommandBar({ session }: { session: Session }) {
     setValue("");
     setGhost("");
     setPaletteOpenState(false);
+    setHistIndex(null);
   }, [session.key]);
 
   // ---------------------------------------------------------------- submitting
@@ -147,6 +190,8 @@ export function CommandBar({ session }: { session: Session }) {
     setValue("");
     setGhost("");
     setCaretAtEnd(true);
+    setHistIndex(null);
+    histDraftRef.current = "";
   }, [value, session.key, session.cwd, recordCommand, writeToPty]);
 
   // ------------------------------------------------------------------ palette
@@ -238,6 +283,18 @@ export function CommandBar({ session }: { session: Session }) {
       return;
     }
 
+    // Bare ↑/↓ browses this session's history. ↑ still adopts ghost text first
+    // when the user has enabled that in settings and a prediction is showing.
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      const ghostTakesUp =
+        e.key === "ArrowUp" && ghost !== "" && adopt.arrowUp && histIndex === null;
+      if (!ghostTakesUp) {
+        e.preventDefault();
+        void navigateHistory(e.key === "ArrowUp" ? 1 : -1);
+        return;
+      }
+    }
+
     if (ghost) {
       const fullAdopt =
         (e.key === "Tab" && adopt.tab) ||
@@ -324,6 +381,7 @@ export function CommandBar({ session }: { session: Session }) {
               onChange={(e) => {
                 setValue(e.target.value);
                 setGhost("");
+                setHistIndex(null);
                 syncCaret();
               }}
               onKeyDown={onKeyDown}

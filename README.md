@@ -118,6 +118,7 @@ scripts\release.bat --installer  :: 额外生成 NSIS 安装包（需要 github.
 | `Tab` / `→` | 采纳 Ghost Text 预测 |
 | `Ctrl + →` | 按词采纳预测 |
 | `Ctrl + R` | 打开历史检索浮层 |
+| `↑` / `↓` | 空输入框时翻阅本会话历史（↑ 更旧、↓ 更新，翻过最新一条回到你原本输入的内容） |
 | `Esc` | 放弃预测 / 关闭浮层并还原原文 |
 | `Ctrl + Shift + P` | 切换「输入框模式 / 原生直通模式」 |
 | `Ctrl + Shift + T` | 新建会话 |

@@ -152,6 +152,24 @@ impl HistoryStore {
         Ok(())
     }
 
+    /// Commands of one session ordered by recency, for ↑/↓ browsing in the
+    /// command bar. Distinct from `search`, which ranks by relevance.
+    pub fn recent(&self, session_id: &str, limit: usize) -> Result<Vec<String>> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT command FROM session_history
+             WHERE session_id = ?1
+             ORDER BY executed_at DESC
+             LIMIT ?2",
+        )?;
+        let mut rows = stmt.query(params![session_id, limit as i64])?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next()? {
+            out.push(row.get(0)?);
+        }
+        Ok(out)
+    }
+
     /// Only used to initialise a warm in-memory index on the frontend.
     pub fn all_commands(&self, session_id: &str) -> Result<Vec<String>> {
         let conn = self.conn.lock();

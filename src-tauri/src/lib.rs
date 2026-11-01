@@ -49,6 +49,7 @@ pub fn run() {
             commands::history_add,
             commands::history_prefix,
             commands::history_search,
+            commands::history_recent,
             commands::history_clear,
             commands::history_commands,
             commands::workspace_load,

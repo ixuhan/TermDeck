@@ -37,6 +37,8 @@ export function createTauriIpc(): Ipc {
     historySearch: (sessionId, query, limit) =>
       invoke<HistoryItem[]>("history_search", { sessionId, query, limit }),
 
+    historyRecent: (sessionId, limit) => invoke<string[]>("history_recent", { sessionId, limit }),
+
     historyClear: (sessionId) => invoke("history_clear", { sessionId }),
 
     workspaceLoad: async () => {
