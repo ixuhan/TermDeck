@@ -1,0 +1,78 @@
+import type {
+  DetectedShell,
+  HistoryItem,
+  Preset,
+  ShellProfile,
+} from "../types";
+
+export interface PersistedWorkspace {
+  version: string;
+  window: {
+    width: number;
+    height: number;
+    x?: number;
+    y?: number;
+    is_maximized: boolean;
+    left_sidebar_width: number;
+    right_sidebar_width: number;
+    right_sidebar_collapsed: boolean;
+  };
+  active_session_id: string | null;
+  sessions: Array<{
+    id: string;
+    title: string;
+    shell_profile: {
+      name: string;
+      executable: string;
+      args: string[];
+      cwd: string | null;
+      env: Record<string, string>;
+    };
+    quick_shortcuts: Array<{
+      id: string;
+      label: string;
+      command: string;
+      auto_execute: boolean;
+    }>;
+  }>;
+  global_presets: Record<string, Preset>;
+}
+
+/** Single contract implemented by both the Tauri backend adapter and the
+ *  browser mock, so UI code never branches on the host. */
+export interface Ipc {
+  readonly isMock: boolean;
+  detectShells(): Promise<DetectedShell[]>;
+  createSession(profile: ShellProfile, cols: number, rows: number): Promise<{ id: string }>;
+  attachSession(sessionId: string): Promise<string>;
+  writePty(sessionId: string, data: string): Promise<void>;
+  resizePty(sessionId: string, cols: number, rows: number): Promise<void>;
+  killSession(sessionId: string): Promise<void>;
+  onPtyData(cb: (p: { sessionId: string; data: string }) => void): Promise<() => void>;
+  onPtyExit(cb: (p: { sessionId: string; code: number }) => void): Promise<() => void>;
+
+  historyAdd(
+    sessionId: string,
+    command: string,
+    cwd: string | null,
+    maxEntries: number,
+    mask: boolean,
+  ): Promise<void>;
+  historyPrefix(sessionId: string, prefix: string): Promise<string | null>;
+  historySearch(sessionId: string, query: string, limit: number): Promise<HistoryItem[]>;
+  historyClear(sessionId: string): Promise<void>;
+
+  workspaceLoad(): Promise<PersistedWorkspace | null>;
+  workspaceSave(state: PersistedWorkspace): Promise<void>;
+  presetsLoad(): Promise<Record<string, Preset> | null>;
+  presetsSave(presets: Record<string, Preset>): Promise<void>;
+
+  settingsLoad(): Promise<Record<string, unknown> | null>;
+  settingsSave(settings: Record<string, unknown>): Promise<void>;
+
+  dataDir(): Promise<string>;
+  openDataDir(): Promise<void>;
+  exportQuickCommands(json: string): Promise<string>;
+  listQuickCommandExports(): Promise<string[]>;
+  importQuickCommands(name: string): Promise<string>;
+}

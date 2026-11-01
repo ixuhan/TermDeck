@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+src-tauri/target/
+src-tauri/gen/
+
+# 本地工具链与缓存（不随仓库分发）
+.toolchain/
+.cache/
+shots/
+
+# 工作区的会话记录，不属于项目代码
+.workbuddy/
