@@ -95,6 +95,18 @@ npm run dev     # http://localhost:1420
 > ⚠️ 不要直接用 `cargo build`。Tauri 需要 `custom-protocol` feature，否则二进制仍指向
 > 开发服务器地址，窗口会全白。`scripts\build.bat` 内部走 `npx tauri build`。
 
+### 打发布包
+
+```bat
+scripts\release.bat              :: 便携版 zip，约 8 MB，离线可用
+scripts\release.bat --installer  :: 额外生成 NSIS 安装包（需要 github.com 可达）
+```
+
+产物在 `release/` 目录。便携版解压即用、数据跟着文件夹走，不写注册表。
+推 `v*` tag 会触发 GitHub Actions 自动打包并创建草稿 Release。
+
+网络受限、版本号怎么改、安装器打不出来怎么办，都写在 [发布指南](docs/RELEASE.md) 里。
+
 ---
 
 ## 快捷键
@@ -198,6 +210,7 @@ node scripts\desktop-verify.mjs :: 关闭、历史持久化、目录持久化
 | [需求规格说明书](docs/TermDeck_SRS_v1.0.md) | 功能需求编号、验收标准、数据模型、状态机 |
 | [实施与验收计划](docs/TermDeck_实施与验收计划_v1.0.md) | 阶段拆分、门禁、用例清单、准出标准 |
 | [环境搭建指南](docs/环境搭建指南.md) | 从零配环境，含国内镜像与踩坑记录 |
+| [发布指南](docs/RELEASE.md) | 三种出包方式、版本号约定、网络受限的解法 |
 | [变更记录](docs/CHANGELOG.md) | 版本改动与实测数据 |
 
 ---

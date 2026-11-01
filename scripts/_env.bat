@@ -33,6 +33,9 @@ set "PATH=%MSVCROOT%\bin\HostX64\x64;%SDK%\bin\%SDKVER%\x64;%PATH%"
 set "INCLUDE=%MSVCROOT%\include;%SDK%\Include\%SDKVER%\ucrt;%SDK%\Include\%SDKVER%\um;%SDK%\Include\%SDKVER%\shared;%SDK%\Include\%SDKVER%\winrt;%SDK%\Include\%SDKVER%\cppwinrt"
 set "LIB=%MSVCROOT%\lib\x64;%SDK%\Lib\%SDKVER%\ucrt\x64;%SDK%\Lib\%SDKVER%\um\x64"
 
+rem Cache stays inside the workspace too (CI overrides this via env).
+set "NPM_CONFIG_CACHE=%~dp0..\.cache\npm"
+
 rem Workspace-local Rust toolchain: nothing is written to the user profile.
 set "CARGO_HOME=%~dp0..\.toolchain\cargo"
 set "RUSTUP_HOME=%~dp0..\.toolchain\rustup"

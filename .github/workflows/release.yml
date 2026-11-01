@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: TermDeck ${{ github.ref_name }}
+          releaseBody: |
+            详细改动见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/docs/CHANGELOG.md)。
+
+            下载 `*_x64-setup.exe` 安装，或下载 `*_x64_en-US.msi` 走 MSI 安装。
+          releaseDraft: true
+          prerelease: false
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          $ver = node -p "require('./package.json').version"
+          $stage = "release/TermDeck-$ver-portable"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "src-tauri/target/release/termdeck.exe" "$stage/TermDeck.exe"
+          Copy-Item "scripts/portable-readme.txt" "$stage/README-portable.txt"
+          Copy-Item "README.md","LICENSE" $stage
+          Compress-Archive -Path $stage -DestinationPath "release/TermDeck-$ver-portable.zip" -Force
+          echo "PORTABLE_ZIP=release/TermDeck-$ver-portable.zip" >> $env:GITHUB_ENV
+
+      - name: Upload portable zip to release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ github.ref_name }} $env:PORTABLE_ZIP --clobber
