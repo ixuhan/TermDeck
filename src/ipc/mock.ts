@@ -130,7 +130,7 @@ class MockShell {
           parts.pop();
           this.cwd = parts.join("\\") || "C:\\";
         } else if (target === "~") {
-          this.cwd = "C:\\Users\\96485";
+          this.cwd = "C:\\Users\\dev";
         } else if (target.startsWith("/")) {
           this.cwd = target;
         } else {

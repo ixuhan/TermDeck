@@ -4,7 +4,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 
-const EXE = "F:\\TermDeck\\src-tauri\\target\\release\\termdeck.exe";
+const EXE = path.resolve("src-tauri/target/release/termdeck.exe");
 const DATA = path.join(path.dirname(EXE), "data");
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const out = [];

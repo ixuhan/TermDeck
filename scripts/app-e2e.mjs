@@ -1,9 +1,10 @@
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
 import http from "node:http";
+import path from "node:path";
 import fs from "node:fs";
 
-const EXE = "F:\\TermDeck\\src-tauri\\target\\release\\termdeck.exe";
+const EXE = path.resolve("src-tauri/target/release/termdeck.exe");
 const OUT = "shots";
 fs.mkdirSync(OUT, { recursive: true });
 
