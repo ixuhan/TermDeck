@@ -33,6 +33,7 @@ export function CommandBar({ session }: { session: Session }) {
   const settings = useStore((s) => s.settings);
   const setMode = useStore((s) => s.setMode);
   const recordCommand = useStore((s) => s.recordCommand);
+  const showToast = useStore((s) => s.showToast);
 
   const setPaletteOpen = useCallback(
     (open: boolean) => {
@@ -323,6 +324,28 @@ export function CommandBar({ session }: { session: Session }) {
     }
   };
 
+  /**
+   * Clears the history of *this* session only. Explicit confirmation because
+   * it is irreversible, and the prompt names the session so the scope is clear.
+   */
+  const clearHistory = useCallback(async () => {
+    const ok = window.confirm(
+      `清空「${session.title}」的命令历史？\n\n` +
+        "只影响当前会话，其他会话的历史不受影响。\n此操作不可撤销，清空后 Ghost Text 与历史检索都不再有记录。",
+    );
+    if (!ok) return;
+    try {
+      await ipc.historyClear(session.key);
+      histListRef.current = [];
+      histDraftRef.current = "";
+      setHistIndex(null);
+      setGhost("");
+      showToast("已清空当前会话的命令历史");
+    } catch (e) {
+      showToast(`清空失败：${String(e)}`);
+    }
+  }, [session.key, session.title, showToast]);
+
   const collapsed = mode === "passthrough";
 
   return (
@@ -412,6 +435,25 @@ export function CommandBar({ session }: { session: Session }) {
             }}
           >
             执行
+          </button>
+          <button
+            className="cmd-clear"
+            title="清空本会话历史（需确认，不影响其他会话）"
+            onClick={() => {
+              void clearHistory();
+              taRef.current?.focus();
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden>
+              <path
+                d="M2.8 4.3h10.4M6.2 4.3V2.9h3.6v1.4M4.1 4.3l.6 8.3a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.6-8.3M6.6 6.8v4.2M9.4 6.8v4.2"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </button>
         </div>
       </div>

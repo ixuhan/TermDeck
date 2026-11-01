@@ -61,6 +61,7 @@ interface Store {
   presets: Record<string, Preset>;
   settings: Settings;
   lastError: string | null;
+  toast: string | null;
   dataDir: string;
 
   boot: () => Promise<void>;
@@ -93,10 +94,12 @@ interface Store {
   setSettings: (patch: Partial<Settings>) => void;
   recordCommand: (sessionKey: string, command: string, cwd: string | null) => void;
   clearError: () => void;
+  showToast: (msg: string) => void;
   persistNow: () => Promise<void>;
 }
 
 let saveTimer: number | undefined;
+let toastTimer: number | undefined;
 let booted = false;
 let availableShells: Array<{ name: string; executable: string; args: string[] }> = [];
 
@@ -145,6 +148,7 @@ export const useStore = create<Store>((set, get) => {
     presets: DEFAULT_PRESETS,
     settings: DEFAULT_SETTINGS,
     lastError: null,
+    toast: null,
     dataDir: "",
 
     async boot() {
@@ -551,6 +555,12 @@ export const useStore = create<Store>((set, get) => {
 
     clearError() {
       set({ lastError: null });
+    },
+
+    showToast(msg) {
+      window.clearTimeout(toastTimer);
+      set({ toast: msg });
+      toastTimer = window.setTimeout(() => set({ toast: null }), 2600);
     },
 
     async persistNow() {

@@ -41,6 +41,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const setSettings = useStore((s) => s.setSettings);
   const session = useActiveSession();
   const dataDir = useStore((s) => s.dataDir);
+  const showToast = useStore((s) => s.showToast);
 
   const toggleAdopt = (key: keyof AdoptKeys, value: boolean) =>
     setSettings({ adoptKeys: { ...settings.adoptKeys, [key]: value } });
@@ -159,8 +160,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               disabled={!session}
               onClick={() => {
                 if (!session) return;
-                if (!window.confirm("清空当前会话的全部历史记录？")) return;
-                void ipc.historyClear(session.key);
+                if (!window.confirm(`清空「${session.title}」的全部历史记录？`)) return;
+                void ipc
+                  .historyClear(session.key)
+                  .then(() => showToast("已清空当前会话的命令历史"))
+                  .catch((e) => showToast(`清空失败：${String(e)}`));
               }}
             >
               清空

@@ -18,6 +18,7 @@ export default function App() {
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const lastError = useStore((s) => s.lastError);
   const clearError = useStore((s) => s.clearError);
+  const toast = useStore((s) => s.toast);
   const session = useActiveSession();
 
   useEffect(() => {
@@ -171,6 +172,7 @@ export default function App() {
         <QuickPanel />
       </div>
       <StatusBar />
+      {toast && <div className="toast">{toast}</div>}
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
   );

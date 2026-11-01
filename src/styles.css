@@ -1287,3 +1287,51 @@ button {
   border-color: var(--accent);
   background: var(--accent-soft);
 }
+
+/* ------------------------------------------------------- clear-button + toast */
+
+.cmd-clear {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  margin: 4px 0 4px 4px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  border: 1px solid transparent;
+}
+
+.cmd-clear:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: #f4c7c7;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 52px;
+  transform: translateX(-50%);
+  z-index: 120;
+  background: #1f2328;
+  color: #fff;
+  font-size: 12.5px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(31, 35, 40, 0.22);
+  pointer-events: none;
+  animation: toast-in 0.16s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
