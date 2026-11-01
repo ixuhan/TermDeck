@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { DetectedShell, HistoryItem, Preset, ShellProfile } from "../types";
+import type { DetectedShell, DirListing, HistoryItem, Preset, ShellProfile } from "../types";
 import type { Ipc, PersistedWorkspace } from "./types";
 
 export function createTauriIpc(): Ipc {
@@ -10,7 +10,7 @@ export function createTauriIpc(): Ipc {
     detectShells: () => invoke<DetectedShell[]>("detect_shells"),
 
     createSession: (profile: ShellProfile, cols: number, rows: number) =>
-      invoke<{ id: string }>("create_session", { profile, cols, rows }),
+      invoke<{ id: string; cwd?: string }>("create_session", { profile, cols, rows }),
 
     attachSession: (sessionId) => invoke<string>("pty_attach", { sessionId }),
 
@@ -76,6 +76,10 @@ export function createTauriIpc(): Ipc {
     },
 
     settingsSave: (settings) => invoke("settings_save", { json: JSON.stringify(settings, null, 2) }),
+
+    readDirectory: (path) => invoke<DirListing>("read_directory", { path }),
+
+    openPath: (path) => invoke("open_path", { path }),
 
     dataDir: () => invoke<string>("data_dir"),
     openDataDir: () => invoke("open_data_dir"),

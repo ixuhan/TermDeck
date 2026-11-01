@@ -282,6 +282,22 @@ pub fn import_quick_commands(app_state: State<'_, AppState>, name: String) -> Re
     Ok(content)
 }
 
+// ------------------------------------------------------------- file browser
+
+#[tauri::command]
+pub fn read_directory(path: String) -> Result<crate::fsview::DirListing, String> {
+    crate::fsview::list_dir(&path).map_err(|e| {
+        crate::logging::warn(format!("read_directory({path}) failed: {e}"));
+        e
+    })
+}
+
+#[tauri::command]
+pub fn open_path(path: String) -> Result<(), String> {
+    crate::logging::info(format!("open_path: {path}"));
+    crate::fsview::open_with_default(&path)
+}
+
 // ---------------------------------------------------------- shell discovery
 
 #[cfg(windows)]

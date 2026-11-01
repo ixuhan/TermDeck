@@ -49,6 +49,30 @@ export interface Session {
   alive: boolean;
   exitCode: number | null;
   quickItems: QuickItem[];
+  dir: DirPanelState;
+}
+
+export interface DirEntry {
+  name: string;
+  isDir: boolean;
+  size: number;
+  path: string;
+}
+
+export interface DirListing {
+  path: string;
+  parent: string | null;
+  entries: DirEntry[];
+  truncated: boolean;
+  /** Backend walked up to an existing ancestor because the path was gone. */
+  corrected: boolean;
+}
+
+export interface DirPanelState {
+  visible: boolean;
+  mode: "dynamic" | "fixed";
+  fixedPath: string | null;
+  currentPath: string;
 }
 
 export interface HistoryItem {

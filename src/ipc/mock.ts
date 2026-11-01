@@ -1,6 +1,7 @@
 import { fuzzyScore } from "../fuzzy";
 import { maskSecrets } from "../mask";
-import type { DetectedShell, HistoryItem, Preset, ShellProfile } from "../types";
+import { mockListing } from "./mockFs";
+import type { DetectedShell, DirListing, HistoryItem, Preset, ShellProfile } from "../types";
 import type { Ipc, PersistedWorkspace } from "./types";
 
 /**
@@ -183,6 +184,7 @@ class MockShell {
   }
 }
 
+
 export function createMockIpc(): Ipc {
   const shells = new Map<string, MockShell>();
   const dataCbs = new Set<DataCb>();
@@ -234,7 +236,7 @@ export function createMockIpc(): Ipc {
       shells.set(id, shell);
       cwdOf.set(id, profile.cwd || "C:\\Projects\\TermDeck");
       ensureSeed(id);
-      return { id };
+      return { id, cwd: profile.cwd || "C:\\Projects\\TermDeck" };
     },
 
     async attachSession(sessionId) {
@@ -372,6 +374,16 @@ export function createMockIpc(): Ipc {
 
     async settingsSave(settings) {
       localStorage.setItem("termdeck.settings", JSON.stringify(settings));
+    },
+
+    async readDirectory(path) {
+      // Small artificial delay so the loading state is observable.
+      await new Promise((r) => setTimeout(r, 60));
+      return mockListing(path);
+    },
+
+    async openPath(path) {
+      console.log("[mock] open with default app:", path);
     },
 
     async dataDir() {

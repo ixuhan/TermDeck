@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { ipc, type PersistedWorkspace } from "./ipc";
 import { ui } from "./focusBus";
 import type {
+  DirPanelState,
   InputMode,
   Preset,
   PresetItem,
@@ -48,7 +49,15 @@ export interface Layout {
   leftWidth: number;
   rightWidth: number;
   rightCollapsed: boolean;
+  dirHeight: number;
 }
+
+const defaultDir = (path: string): DirPanelState => ({
+  visible: true,
+  mode: "dynamic",
+  fixedPath: null,
+  currentPath: path,
+});
 
 interface Store {
   ready: boolean;
@@ -89,6 +98,11 @@ interface Store {
   exportQuickCommands: () => Promise<string | null>;
   importQuickCommands: (fileName: string) => Promise<string | null>;
   listExports: () => Promise<string[]>;
+
+  setDirVisible: (key: string, visible: boolean) => void;
+  setDirMode: (key: string, mode: DirPanelState["mode"]) => void;
+  setDirFixedPath: (key: string, path: string | null) => void;
+  setDirPath: (key: string, path: string) => void;
 
   setLayout: (patch: Partial<Layout>) => void;
   setSettings: (patch: Partial<Settings>) => void;
@@ -133,8 +147,20 @@ export const useStore = create<Store>((set, get) => {
       ...session.profile,
       cwd: session.cwd || session.profile.cwd || null,
     };
-    const { id } = await ipc.createSession(profile, 120, 30);
-    return { ...session, ptyId: id, spawned: true, alive: true, exitCode: null };
+    const { id, cwd } = await ipc.createSession(profile, 120, 30);
+    const resolvedCwd = session.cwd || cwd || session.dir.currentPath || "";
+    return {
+      ...session,
+      ptyId: id,
+      spawned: true,
+      alive: true,
+      exitCode: null,
+      cwd: resolvedCwd,
+      dir:
+        session.dir.mode === "dynamic"
+          ? { ...session.dir, currentPath: resolvedCwd }
+          : session.dir,
+    };
   };
 
   return {
@@ -144,7 +170,7 @@ export const useStore = create<Store>((set, get) => {
     mode: "input",
     manualLock: false,
     settingsOpen: false,
-    layout: { leftWidth: 240, rightWidth: 280, rightCollapsed: false },
+    layout: { leftWidth: 240, rightWidth: 300, rightCollapsed: false, dirHeight: 240 },
     presets: DEFAULT_PRESETS,
     settings: DEFAULT_SETTINGS,
     lastError: null,
@@ -190,6 +216,20 @@ export const useStore = create<Store>((set, get) => {
             command: q.command,
             autoExecute: q.auto_execute,
           })),
+          dir: s.directory_panel
+            ? {
+                visible: s.directory_panel.is_visible,
+                mode: s.directory_panel.mode,
+                fixedPath: s.directory_panel.fixed_path,
+                currentPath:
+                  s.directory_panel.mode === "dynamic"
+                    ? s.shell_profile.cwd ?? s.directory_panel.current_path ?? ""
+                    : s.directory_panel.current_path ||
+                      s.directory_panel.fixed_path ||
+                      s.shell_profile.cwd ||
+                      "",
+              }
+            : defaultDir(s.shell_profile.cwd ?? ""),
         }));
 
         const activeKey =
@@ -200,8 +240,9 @@ export const useStore = create<Store>((set, get) => {
           activeKey,
           layout: {
             leftWidth: saved.window?.left_sidebar_width ?? 240,
-            rightWidth: saved.window?.right_sidebar_width ?? 280,
+            rightWidth: saved.window?.right_sidebar_width ?? 300,
             rightCollapsed: saved.window?.right_sidebar_collapsed ?? false,
+            dirHeight: saved.window?.right_dir_height ?? 240,
           },
           ready: true,
         });
@@ -257,6 +298,7 @@ export const useStore = create<Store>((set, get) => {
         alive: false,
         exitCode: null,
         quickItems: toQuickItems(DEFAULT_QUICK),
+        dir: defaultDir(p.cwd ?? ""),
       };
       set((s) => ({ sessions: [...s.sessions, draft], activeKey: draft.key }));
       try {
@@ -328,7 +370,16 @@ export const useStore = create<Store>((set, get) => {
       if (!cwd) return;
       set((s) => ({
         sessions: s.sessions.map((x) =>
-          x.key === key ? { ...x, cwd, profile: { ...x.profile, cwd } } : x,
+          x.key === key
+            ? {
+                ...x,
+                cwd,
+                profile: { ...x.profile, cwd },
+                // Dynamic mode follows the shell; fixed mode stays put.
+                dir:
+                  x.dir.mode === "dynamic" ? { ...x.dir, currentPath: cwd } : x.dir,
+              }
+            : x,
         ),
       }));
       // Persist so the next launch reopens in the same directory (#10).
@@ -537,6 +588,50 @@ export const useStore = create<Store>((set, get) => {
       }
     },
 
+    setDirVisible(key, visible) {
+      set((s) => ({
+        sessions: s.sessions.map((x) =>
+          x.key === key ? { ...x, dir: { ...x.dir, visible } } : x,
+        ),
+      }));
+      schedule();
+    },
+
+    setDirMode(key, mode) {
+      set((s) => ({
+        sessions: s.sessions.map((x) => {
+          if (x.key !== key) return x;
+          if (mode === "dynamic") {
+            return { ...x, dir: { ...x.dir, mode, currentPath: x.cwd || x.dir.currentPath } };
+          }
+          // Locking onto whatever the panel is showing right now.
+          const locked = x.dir.currentPath || x.cwd || null;
+          return { ...x, dir: { ...x.dir, mode, fixedPath: x.dir.fixedPath ?? locked } };
+        }),
+      }));
+      schedule();
+    },
+
+    setDirFixedPath(key, path) {
+      set((s) => ({
+        sessions: s.sessions.map((x) =>
+          x.key === key
+            ? { ...x, dir: { ...x.dir, fixedPath: path, currentPath: path ?? x.dir.currentPath } }
+            : x,
+        ),
+      }));
+      schedule();
+    },
+
+    setDirPath(key, path) {
+      set((s) => ({
+        sessions: s.sessions.map((x) =>
+          x.key === key ? { ...x, dir: { ...x.dir, currentPath: path } } : x,
+        ),
+      }));
+      schedule();
+    },
+
     setLayout(patch) {
       set((s) => ({ layout: { ...s.layout, ...patch } }));
       schedule();
@@ -574,6 +669,7 @@ export const useStore = create<Store>((set, get) => {
           left_sidebar_width: s.layout.leftWidth,
           right_sidebar_width: s.layout.rightWidth,
           right_sidebar_collapsed: s.layout.rightCollapsed,
+          right_dir_height: s.layout.dirHeight,
         },
         active_session_id: s.activeKey,
         sessions: s.sessions.map((x) => ({
@@ -592,6 +688,12 @@ export const useStore = create<Store>((set, get) => {
             command: q.command,
             auto_execute: q.autoExecute,
           })),
+          directory_panel: {
+            is_visible: x.dir.visible,
+            mode: x.dir.mode,
+            fixed_path: x.dir.fixedPath,
+            current_path: x.dir.currentPath,
+          },
         })),
         global_presets: s.presets,
       };

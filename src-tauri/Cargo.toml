@@ -1,6 +1,6 @@
 [package]
 name = "termdeck"
-version = "0.2.0"
+version = "0.3.0"
 description = "TermDeck - Windows enhanced workflow terminal"
 authors = ["ixuhan"]
 edition = "2021"

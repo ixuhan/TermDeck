@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { CommandBar } from "./components/CommandBar";
 import { LeftRail } from "./components/LeftRail";
+import { DirectoryPanel } from "./components/DirectoryPanel";
 import { QuickPanel } from "./components/QuickPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StatusBar } from "./components/StatusBar";
@@ -14,6 +15,7 @@ export default function App() {
   const activeKey = useStore((s) => s.activeKey);
   const layout = useStore((s) => s.layout);
   const setLayout = useStore((s) => s.setLayout);
+  const setDirVisible = useStore((s) => s.setDirVisible);
   const settingsOpen = useStore((s) => s.settingsOpen);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const lastError = useStore((s) => s.lastError);
@@ -101,6 +103,24 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
+  const startDirResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = layout.dirHeight;
+    document.body.classList.add("is-resizing-v");
+    const move = (ev: MouseEvent) => {
+      const dy = ev.clientY - startY;
+      setLayout({ dirHeight: Math.min(520, Math.max(120, startH - dy)) });
+    };
+    const up = () => {
+      document.body.classList.remove("is-resizing-v");
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
   const startResize = (side: "left" | "right") => (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -168,8 +188,31 @@ export default function App() {
           )}
         </main>
 
-        {!layout.rightCollapsed && <div className="resizer" onMouseDown={startResize("right")} />}
-        <QuickPanel />
+        {layout.rightCollapsed ? (
+          <QuickPanel />
+        ) : (
+          <>
+            <div className="resizer" onMouseDown={startResize("right")} />
+            <div className="right-col">
+              <QuickPanel />
+              {session && session.dir.visible && (
+                <>
+                  <div className="resizer-h" onMouseDown={startDirResize} />
+                  <DirectoryPanel session={session} active />
+                </>
+              )}
+              {session && !session.dir.visible && (
+                <button
+                  className="dir-tab"
+                  title="展开文件目录面板"
+                  onClick={() => setDirVisible(session.key, true)}
+                >
+                  文件目录
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
       <StatusBar />
       {toast && <div className="toast">{toast}</div>}

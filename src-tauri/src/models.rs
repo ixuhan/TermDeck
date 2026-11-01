@@ -21,6 +21,9 @@ pub struct ShellProfile {
 pub struct SessionInfo {
     pub id: String,
     pub pid: Option<u32>,
+    /// Directory the shell was actually started in (falls back to the app's
+    /// working directory when the profile has no fixed CWD).
+    pub cwd: Option<String>,
 }
 
 /// Row of the per-session command history.

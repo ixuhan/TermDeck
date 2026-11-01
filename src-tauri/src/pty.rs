@@ -54,11 +54,21 @@ impl PtyManager {
 
         let mut cmd = CommandBuilder::new(&profile.executable);
         cmd.args(&profile.args);
+
+        // Resolve once so the UI can show a real starting directory.
+        let mut spawn_cwd: Option<String> = None;
         if let Some(cwd) = profile.cwd.as_ref() {
-            let p = std::path::Path::new(cwd);
-            if p.is_dir() {
-                cmd.cwd(p);
+            if std::path::Path::new(cwd).is_dir() {
+                spawn_cwd = Some(cwd.clone());
             }
+        }
+        if spawn_cwd.is_none() {
+            spawn_cwd = std::env::current_dir()
+                .ok()
+                .map(|p| p.to_string_lossy().to_string());
+        }
+        if let Some(dir) = spawn_cwd.as_ref() {
+            cmd.cwd(dir);
         }
         for (k, v) in &profile.env {
             cmd.env(k, v);
@@ -167,7 +177,11 @@ impl PtyManager {
         crate::logging::info(format!("session {id} spawned (pid={pid:?})"));
         self.sessions.lock().insert(id.clone(), session);
 
-        Ok(SessionInfo { id, pid })
+        Ok(SessionInfo {
+            id,
+            pid,
+            cwd: spawn_cwd,
+        })
     }
 
     /// Hand over everything the shell printed before the UI was listening, then

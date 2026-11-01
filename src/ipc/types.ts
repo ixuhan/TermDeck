@@ -1,5 +1,6 @@
 import type {
   DetectedShell,
+  DirListing,
   HistoryItem,
   Preset,
   ShellProfile,
@@ -16,6 +17,7 @@ export interface PersistedWorkspace {
     left_sidebar_width: number;
     right_sidebar_width: number;
     right_sidebar_collapsed: boolean;
+    right_dir_height?: number;
   };
   active_session_id: string | null;
   sessions: Array<{
@@ -34,6 +36,12 @@ export interface PersistedWorkspace {
       command: string;
       auto_execute: boolean;
     }>;
+    directory_panel?: {
+      is_visible: boolean;
+      mode: "dynamic" | "fixed";
+      fixed_path: string | null;
+      current_path: string;
+    };
   }>;
   global_presets: Record<string, Preset>;
 }
@@ -43,7 +51,11 @@ export interface PersistedWorkspace {
 export interface Ipc {
   readonly isMock: boolean;
   detectShells(): Promise<DetectedShell[]>;
-  createSession(profile: ShellProfile, cols: number, rows: number): Promise<{ id: string }>;
+  createSession(
+    profile: ShellProfile,
+    cols: number,
+    rows: number,
+  ): Promise<{ id: string; cwd?: string }>;
   attachSession(sessionId: string): Promise<string>;
   writePty(sessionId: string, data: string): Promise<void>;
   resizePty(sessionId: string, cols: number, rows: number): Promise<void>;
@@ -71,6 +83,10 @@ export interface Ipc {
 
   settingsLoad(): Promise<Record<string, unknown> | null>;
   settingsSave(settings: Record<string, unknown>): Promise<void>;
+
+  /** One-shot directory read; no watchers are installed on the Rust side. */
+  readDirectory(path: string): Promise<DirListing>;
+  openPath(path: string): Promise<void>;
 
   dataDir(): Promise<string>;
   openDataDir(): Promise<void>;

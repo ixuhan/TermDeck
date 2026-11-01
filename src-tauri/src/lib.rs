@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod fsview;
 pub mod history;
 pub mod logging;
 pub mod models;
@@ -63,6 +64,8 @@ pub fn run() {
             commands::export_quick_commands,
             commands::list_quick_command_exports,
             commands::import_quick_commands,
+            commands::read_directory,
+            commands::open_path,
             commands::detect_shells,
         ])
         .on_window_event(|window, event| {
