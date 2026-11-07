@@ -415,7 +415,7 @@ export function createMockIpc(): Ipc {
     async exportQuickCommands(json) {
       const name = `quick-commands-${Date.now()}.json`;
       localStorage.setItem(`termdeck.export.${name}`, json);
-      return `localStorage://${name}`;
+      return name;
     },
 
     async listQuickCommandExports() {

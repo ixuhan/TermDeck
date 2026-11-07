@@ -95,6 +95,7 @@ interface Store {
   moveQuick: (key: string, itemId: string, dir: -1 | 1) => void;
   applyPreset: (key: string, presetKey: string) => void;
   savePreset: (name: string) => void;
+  /** Resolves with the exported file name (not the full path), or null on failure. */
   exportQuickCommands: () => Promise<string | null>;
   importQuickCommands: (fileName: string) => Promise<string | null>;
   listExports: () => Promise<string[]>;

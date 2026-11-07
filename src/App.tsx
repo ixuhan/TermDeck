@@ -50,6 +50,16 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const s = useStore.getState();
       const mod = e.ctrlKey || e.metaKey;
+
+      // Never let the webview reload itself. Ctrl+R is the history palette, and
+      // a reload in the middle of a session is pure data loss for the UI state.
+      // The address-bar shortcuts are only reachable when focus is somewhere
+      // other than the command bar, so this has to be caught globally.
+      if ((mod && !e.shiftKey && e.key.toLowerCase() === "r") || e.key === "F5") {
+        e.preventDefault();
+        return;
+      }
+
       if (mod && e.shiftKey && e.key.toLowerCase() === "p") {
         e.preventDefault();
         s.toggleManualLock();

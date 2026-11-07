@@ -255,7 +255,9 @@ pub fn export_quick_commands(
     let path = dir.join(&name);
     write_atomic(&path, &json).map_err(|e| e.to_string())?;
     crate::logging::info(format!("exported quick commands -> {}", path.display()));
-    Ok(path.to_string_lossy().to_string())
+    // Return the file name, not the absolute path: the UI shows this in a
+    // narrow sidebar where a full path wraps into an unreadable block.
+    Ok(name)
 }
 
 #[tauri::command]

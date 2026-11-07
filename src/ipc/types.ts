@@ -109,6 +109,7 @@ export interface Ipc {
 
   dataDir(): Promise<string>;
   openDataDir(): Promise<void>;
+  /** Returns the exported file name (the file lands in `data/exports/`). */
   exportQuickCommands(json: string): Promise<string>;
   listQuickCommandExports(): Promise<string[]>;
   importQuickCommands(name: string): Promise<string>;

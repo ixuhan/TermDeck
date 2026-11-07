@@ -153,7 +153,7 @@ export function QuickPanel() {
   const setLayout = useStore((s) => s.setLayout);
 
   const [presetKey, setPresetKey] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
+  const showToast = useStore((s) => s.showToast);
   const [importOpen, setImportOpen] = useState(false);
   const [exportFiles, setExportFiles] = useState<string[]>([]);
 
@@ -203,7 +203,7 @@ export function QuickPanel() {
             setPresetKey(key);
             if (key && session) {
               applyPreset(session.key, key);
-              setNotice(`已把「${presets[key]?.name ?? key}」载入当前会话（不影响其他会话）`);
+              showToast(`已把「${presets[key]?.name ?? key}」载入当前会话`);
             }
           }}
         >
@@ -222,7 +222,7 @@ export function QuickPanel() {
             const name = window.prompt("新预设名称");
             if (!name) return;
             savePreset(name);
-            setNotice(`已保存预设「${name}」`);
+            showToast(`已保存预设「${name}」`);
           }}
         >
           ★
@@ -251,8 +251,8 @@ export function QuickPanel() {
         <button
           className="link-btn"
           onClick={async () => {
-            const path = await exportQuickCommands();
-            if (path) setNotice(`已导出到 ${path}`);
+            const name = await exportQuickCommands();
+            if (name) showToast(`已导出 ${name} 到 data/exports/`);
           }}
         >
           导出指令集
@@ -261,12 +261,6 @@ export function QuickPanel() {
           导入指令集
         </button>
       </div>
-
-      {notice && (
-        <div className="quick-notice" onAnimationEnd={() => setNotice(null)}>
-          {notice}
-        </div>
-      )}
 
       {importOpen && (
         <div className="modal-mask" onClick={() => setImportOpen(false)}>
@@ -290,7 +284,7 @@ export function QuickPanel() {
                     onClick={async () => {
                       const err = await importQuickCommands(f);
                       setImportOpen(false);
-                      setNotice(err ?? `已导入 ${f}`);
+                      showToast(err ?? `已导入 ${f}`);
                     }}
                   >
                     {f}

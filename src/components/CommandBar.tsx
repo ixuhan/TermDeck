@@ -251,6 +251,14 @@ export function CommandBar({ session }: { session: Session }) {
     const composing = e.nativeEvent.isComposing || (e.nativeEvent as KeyboardEvent).keyCode === 229;
 
     if (paletteOpen) {
+      // Ctrl+R while the palette is open must not fall through to the webview,
+      // which would reload the whole app. Treat it as "close and restore".
+      if (e.key === "r" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        applyValue(backupRef.current);
+        setPaletteOpen(false);
+        return;
+      }
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setPaletteIndex((i) => Math.min(i + 1, paletteItems.length - 1));
