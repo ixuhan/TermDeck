@@ -104,6 +104,14 @@ export interface Ipc {
    */
   installUpdate(onProgress: (done: number, total: number) => void): Promise<void>;
 
+  /**
+   * Persists the ANSI-serialized terminal buffer so the screen can be repainted
+   * after a restart. Display-only: the replay is never fed back as input.
+   */
+  scrollbackSave(sessionKey: string, data: string): Promise<void>;
+  scrollbackLoad(sessionKey: string): Promise<string | null>;
+  scrollbackClear(sessionKey: string): Promise<void>;
+
   /** Portable builds keep their data next to the exe and must not self-update. */
   installKind(): Promise<InstallKind>;
 

@@ -400,6 +400,19 @@ export function createMockIpc(): Ipc {
       throw new Error("浏览器预览环境不支持自动更新");
     },
 
+    async scrollbackSave(sessionKey, data) {
+      if (data) localStorage.setItem(`termdeck.scrollback.${sessionKey}`, data);
+      else localStorage.removeItem(`termdeck.scrollback.${sessionKey}`);
+    },
+
+    async scrollbackLoad(sessionKey) {
+      return localStorage.getItem(`termdeck.scrollback.${sessionKey}`);
+    },
+
+    async scrollbackClear(sessionKey) {
+      localStorage.removeItem(`termdeck.scrollback.${sessionKey}`);
+    },
+
     async installKind() {
       return "installed" as const;
     },

@@ -329,6 +329,9 @@ export const useStore = create<Store>((set, get) => {
     async closeSession(key) {
       const session = get().sessions.find((x) => x.key === key);
       if (session?.ptyId) await ipc.killSession(session.ptyId).catch(() => undefined);
+      // The user deleted this session on purpose: drop its saved screen too,
+      // otherwise the file would linger with nothing able to reach it.
+      void ipc.scrollbackClear(key).catch(() => undefined);
       set((s) => {
         const sessions = s.sessions.filter((x) => x.key !== key);
         const activeKey =

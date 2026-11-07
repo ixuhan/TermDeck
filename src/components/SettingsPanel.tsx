@@ -202,6 +202,13 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </label>
 
           <Toggle
+            label="恢复上次的终端内容"
+            hint="重开会话时回放上次屏幕上的输出（只读），命令历史与目录不受影响"
+            checked={settings.restoreScrollback}
+            onChange={(v) => setSettings({ restoreScrollback: v })}
+          />
+
+          <Toggle
             label="WebGL 渲染"
             hint="关闭后改用 DOM 渲染，省显存，长文本滚动可能略慢"
             checked={settings.webgl}

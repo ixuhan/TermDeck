@@ -7,6 +7,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { StatusBar } from "./components/StatusBar";
 import { TerminalView } from "./components/TerminalView";
 import { ipc } from "./ipc";
+import { scrollbacks } from "./scrollbackBus";
 import { useActiveSession, useStore } from "./store";
 
 export default function App() {
@@ -107,6 +108,13 @@ export default function App() {
           await useStore.getState().persistNow();
         } catch {
           /* keep closing even if the save failed */
+        }
+        // Window close does not unmount React, so the terminals have to hand
+        // over their final screen contents here or the last seconds are lost.
+        try {
+          await scrollbacks.flush((key, data) => ipc.scrollbackSave(key, data));
+        } catch {
+          /* a broken terminal must not block the close */
         }
         try {
           await win.destroy();

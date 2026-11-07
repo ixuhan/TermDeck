@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { SerializeAddon } from "@xterm/addon-serialize";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { ipc } from "../ipc";
 import { ui } from "../focusBus";
+import { scrollbacks } from "../scrollbackBus";
 import { useStore } from "../store";
 import type { Session } from "../types";
 
@@ -31,6 +33,15 @@ const THEME = {
   brightWhite: "#8c959f",
 };
 
+/** Written between the restored screen and the new shell's first prompt. */
+const RESTORE_MARK = "\r\n\x1b[38;5;245m──── 以上为上次会话的输出 ────\x1b[0m\r\n";
+
+/** Give the shell a moment to settle before serializing the whole buffer. */
+const SAVE_DEBOUNCE_MS = 3000;
+
+/** Cap how many scrollback lines get serialized; the rest is not worth 3 MB. */
+const MAX_SERIALIZED_LINES = 2000;
+
 export function TerminalView({ session, active }: { session: Session; active: boolean }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -55,7 +66,9 @@ export function TerminalView({ session, active }: { session: Session; active: bo
       scrollback,
     });
     const fit = new FitAddon();
+    const serialize = new SerializeAddon();
     term.loadAddon(fit);
+    term.loadAddon(serialize);
     term.open(hostRef.current);
 
     // WebGL is a nice-to-have: no GPU / headless hosts must not break rendering.
@@ -76,26 +89,72 @@ export function TerminalView({ session, active }: { session: Session; active: bo
     termRef.current = term;
     fitRef.current = fit;
 
+    let disposed = false;
+    let saveTimer: number | undefined;
+
+    /**
+     * Serializes the visible screen plus scrollback as ANSI text.
+     *
+     * The alternate buffer belongs to a full-screen app (vim, ssh): replaying it
+     * would resurrect a screen whose process is long gone, so it is skipped.
+     */
+    const snapshot = (): string => {
+      if (disposed) return "";
+      try {
+        if (term.buffer.active.type !== "normal") return "";
+        return serialize.serialize({ scrollback: Math.min(scrollback, MAX_SERIALIZED_LINES) });
+      } catch {
+        return "";
+      }
+    };
+
+    const scheduleSave = () => {
+      if (saveTimer) window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(() => {
+        saveTimer = undefined;
+        if (disposed) return;
+        void ipc.scrollbackSave(session.key, snapshot()).catch(() => undefined);
+      }, SAVE_DEBOUNCE_MS);
+    };
+
+    scrollbacks.register(session.key, snapshot);
+
     const dataSub = term.onData((data) => {
       void ipc.writePty(pid, data);
     });
 
-    let disposed = false;
     let offData: (() => void) | undefined;
-    void ipc
-      .onPtyData(({ sessionId, data }) => {
-        if (sessionId === pid) term.write(data);
-      })
-      .then((off) => {
-        if (disposed) {
-          off();
-          return;
+
+    // Restore first, then attach: the backend replays everything that arrived
+    // before the attach, so nothing printed during the await is lost.
+    void (async () => {
+      if (useStore.getState().settings.restoreScrollback) {
+        const saved = await ipc.scrollbackLoad(session.key).catch(() => null);
+        if (disposed) return;
+        if (saved) {
+          term.write(saved);
+          term.write(RESTORE_MARK);
         }
-        offData = off;
-        void ipc.attachSession(pid).then((buffered) => {
-          if (!disposed && buffered) term.write(buffered);
-        });
+      }
+      if (disposed) return;
+
+      const off = await ipc.onPtyData(({ sessionId, data }) => {
+        if (sessionId !== pid) return;
+        term.write(data);
+        scheduleSave();
       });
+      if (disposed) {
+        off();
+        return;
+      }
+      offData = off;
+
+      const buffered = await ipc.attachSession(pid).catch(() => "");
+      if (!disposed && buffered) {
+        term.write(buffered);
+        scheduleSave();
+      }
+    })();
 
     // Alternate-screen detection drives the pass-through state machine.
     let bufferSub: { dispose: () => void } | undefined;
@@ -132,6 +191,25 @@ export function TerminalView({ session, active }: { session: Session; active: bo
 
     return () => {
       disposed = true;
+      if (saveTimer) window.clearTimeout(saveTimer);
+      scrollbacks.unregister(session.key);
+
+      // Save the last screen, unless the session itself is being deleted -
+      // closeSession clears the file and a save here would recreate it.
+      const stillExists = useStore.getState().sessions.some((s) => s.key === session.key);
+      if (stillExists) {
+        try {
+          if (term.buffer.active.type === "normal") {
+            const data = serialize.serialize({
+              scrollback: Math.min(scrollback, MAX_SERIALIZED_LINES),
+            });
+            if (data) void ipc.scrollbackSave(session.key, data).catch(() => undefined);
+          }
+        } catch {
+          /* nothing to save */
+        }
+      }
+
       ro.disconnect();
       offData?.();
       dataSub.dispose();

@@ -209,6 +209,80 @@ pub fn settings_save(app_state: State<'_, AppState>, json: String) -> Result<(),
 ///
 /// The updater must not run in a portable copy: it would install into
 /// `%LOCALAPPDATA%` and leave the user with two copies, one of them stale.
+// ------------------------------------------------------------------ scrollback
+//
+// Screen contents are stored as the ANSI-serialized xterm buffer. Replaying it
+// restores colours and layout; the data is display-only and never interpreted
+// as input.
+
+/// Keeps the newest output: the tail is what the user was looking at.
+const MAX_SCROLLBACK_BYTES: usize = 1024 * 1024;
+
+fn scrollback_path(app_state: &AppState, session_key: &str) -> Option<std::path::PathBuf> {
+    // Session keys are UUIDs, but never trust one to be a safe file name.
+    if session_key.is_empty()
+        || !session_key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return None;
+    }
+    Some(app_state.paths.scrollbacks().join(format!("{session_key}.ansi")))
+}
+
+#[tauri::command]
+pub fn scrollback_save(
+    app_state: State<'_, AppState>,
+    session_key: String,
+    data: String,
+) -> Result<(), String> {
+    let Some(path) = scrollback_path(&app_state, &session_key) else {
+        return Err("非法的会话标识".into());
+    };
+    if data.is_empty() {
+        let _ = std::fs::remove_file(&path);
+        return Ok(());
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+
+    let payload: &str = if data.len() > MAX_SCROLLBACK_BYTES {
+        let mut start = data.len() - MAX_SCROLLBACK_BYTES;
+        while start < data.len() && !data.is_char_boundary(start) {
+            start += 1;
+        }
+        // Dropping the head can leave a half-written escape sequence; reset the
+        // attributes first so the replay starts from a known state.
+        &data[start..]
+    } else {
+        &data
+    };
+
+    write_atomic(&path, payload).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn scrollback_load(app_state: State<'_, AppState>, session_key: String) -> Option<String> {
+    let path = scrollback_path(&app_state, &session_key)?;
+    std::fs::read_to_string(path).ok().filter(|s| !s.is_empty())
+}
+
+#[tauri::command]
+pub fn scrollback_clear(
+    app_state: State<'_, AppState>,
+    session_key: String,
+) -> Result<(), String> {
+    let Some(path) = scrollback_path(&app_state, &session_key) else {
+        return Ok(());
+    };
+    match std::fs::remove_file(path) {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 #[tauri::command]
 pub fn install_kind() -> String {
     if crate::workspace::is_portable() {

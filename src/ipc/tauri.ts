@@ -121,6 +121,14 @@ export function createTauriIpc(): Ipc {
       await relaunch();
     },
 
+    scrollbackSave: (sessionKey, data) =>
+      invoke("scrollback_save", { sessionKey, data }),
+
+    scrollbackLoad: (sessionKey) =>
+      invoke<string | null>("scrollback_load", { sessionKey }),
+
+    scrollbackClear: (sessionKey) => invoke("scrollback_clear", { sessionKey }),
+
     installKind: () => invoke<InstallKind>("install_kind"),
 
     dataDir: () => invoke<string>("data_dir"),

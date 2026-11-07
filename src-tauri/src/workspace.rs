@@ -35,6 +35,12 @@ impl AppPaths {
     pub fn exports(&self) -> PathBuf {
         self.dir.join("exports")
     }
+
+    /// One serialized screen snapshot per session, used to repaint the terminal
+    /// after a restart.
+    pub fn scrollbacks(&self) -> PathBuf {
+        self.dir.join("scrollback")
+    }
 }
 
 /// The workspace-local data directory: `<exe dir>/data`. Falls back to the

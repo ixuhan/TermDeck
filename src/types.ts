@@ -125,6 +125,8 @@ export interface Settings {
   webgl: boolean;
   /** Only spawn PTYs for sessions the user actually opens (lower memory). */
   lazySpawn: boolean;
+  /** Repaint the previous screen contents when a session is (re)started. */
+  restoreScrollback: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -139,4 +141,5 @@ export const DEFAULT_SETTINGS: Settings = {
   scrollback: 3000,
   webgl: true,
   lazySpawn: true,
+  restoreScrollback: true,
 };
