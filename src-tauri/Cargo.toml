@@ -1,6 +1,6 @@
 [package]
 name = "termdeck"
-version = "0.3.0"
+version = "0.3.1"
 description = "TermDeck - Windows enhanced workflow terminal"
 authors = ["ixuhan"]
 edition = "2021"
@@ -22,6 +22,10 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 parking_lot = "0.12"
 anyhow = "1"
 uuid = { version = "1", features = ["v4"] }
+# Auto-update: verifies the Ed25519 signature of the downloaded package
+# against the public key compiled into the binary.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [profile.release]
 # No LTO on purpose. Thin LTO re-processes every dependency's codegen units on

@@ -39,6 +39,11 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The updater only accepts packages signed with this key. Losing it
+          # means already-installed copies can never be updated again - keep a
+          # backup outside the repository.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: TermDeck ${{ github.ref_name }}
@@ -49,8 +54,11 @@ jobs:
 
             | 文件 | 说明 |
             |---|---|
-            | `TermDeck_*_x64-setup.exe` | 安装版，带开始菜单与卸载项，推荐 |
-            | `TermDeck-*-portable.zip` | 便携版，解压即用，数据跟着文件夹走 |
+            | `TermDeck_*_x64-setup.exe` | 安装版，带开始菜单与卸载项，推荐（支持自动更新） |
+            | `TermDeck-*-portable.zip` | 便携版，解压即用，数据跟着文件夹走（手动更新） |
+
+            安装版会在启动后自动检查新版本，也可以在「设置 → 关于与更新」里手动检查。
+            `latest.json` 与 `.sig` 是自动更新的清单与签名，不需要手动下载。
 
             ## 系统要求
 

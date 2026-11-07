@@ -13,3 +13,6 @@ shots/
 # 工作区的会话记录，不属于项目代码
 .workbuddy/
 release/
+
+# Update signing keys must never enter the repository.
+*.key

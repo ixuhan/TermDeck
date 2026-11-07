@@ -2,8 +2,10 @@ import type {
   DetectedShell,
   DirListing,
   HistoryItem,
+  InstallKind,
   Preset,
   ShellProfile,
+  UpdateInfo,
 } from "../types";
 
 export interface PersistedWorkspace {
@@ -87,6 +89,23 @@ export interface Ipc {
   /** One-shot directory read; no watchers are installed on the Rust side. */
   readDirectory(path: string): Promise<DirListing>;
   openPath(path: string): Promise<void>;
+
+  /**
+   * Asks the update endpoint whether a newer version exists.
+   * `null` means either "already current" or "this runtime cannot update"
+   * (browser preview), so callers do not need to special-case errors.
+   */
+  checkUpdate(): Promise<UpdateInfo | null>;
+
+  /**
+   * Downloads and installs the update found by `checkUpdate`, then relaunches.
+   * `onProgress(doneBytes, totalBytes)` is called while downloading; total is 0
+   * when the server does not report a content length.
+   */
+  installUpdate(onProgress: (done: number, total: number) => void): Promise<void>;
+
+  /** Portable builds keep their data next to the exe and must not self-update. */
+  installKind(): Promise<InstallKind>;
 
   dataDir(): Promise<string>;
   openDataDir(): Promise<void>;

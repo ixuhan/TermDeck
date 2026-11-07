@@ -1,5 +1,6 @@
 import { ipc } from "../ipc";
 import { useActiveSession, useStore } from "../store";
+import { UpdateSection } from "./UpdateSection";
 import type { AdoptKeys } from "../types";
 
 function Toggle({
@@ -218,6 +219,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               打开
             </button>
           </div>
+
+          <UpdateSection />
         </div>
 
         <div className="modal-foot">

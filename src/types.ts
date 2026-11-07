@@ -52,6 +52,15 @@ export interface Session {
   dir: DirPanelState;
 }
 
+export interface UpdateInfo {
+  version: string;
+  notes: string | null;
+  date: string | null;
+}
+
+/** Where the running binary lives: a normal install or the portable folder. */
+export type InstallKind = "installed" | "portable";
+
 export interface DirEntry {
   name: string;
   isDir: boolean;

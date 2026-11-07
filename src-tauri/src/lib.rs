@@ -17,6 +17,10 @@ pub struct AppState {
 
 pub fn run() {
     tauri::Builder::default()
+        // Updater checks the endpoint on demand; nothing runs in the
+        // background unless the UI asks for it.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let fallback = app
                 .path()
@@ -59,6 +63,7 @@ pub fn run() {
             commands::presets_save,
             commands::settings_load,
             commands::settings_save,
+            commands::install_kind,
             commands::data_dir,
             commands::open_data_dir,
             commands::export_quick_commands,

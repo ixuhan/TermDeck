@@ -6,6 +6,7 @@ import { QuickPanel } from "./components/QuickPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StatusBar } from "./components/StatusBar";
 import { TerminalView } from "./components/TerminalView";
+import { ipc } from "./ipc";
 import { useActiveSession, useStore } from "./store";
 
 export default function App() {
@@ -26,6 +27,23 @@ export default function App() {
   useEffect(() => {
     void boot();
   }, [boot]);
+
+  // Quiet update check once the window is up. Deliberately late and silent:
+  // a terminal must never interrupt what you are typing to advertise itself.
+  useEffect(() => {
+    if (ipc.isMock) return;
+    const timer = window.setTimeout(() => {
+      void ipc
+        .checkUpdate()
+        .then((info) => {
+          if (info) useStore.getState().showToast(`发现新版本 v${info.version}，可在设置中更新`);
+        })
+        .catch(() => {
+          /* offline or endpoint unreachable: stay quiet */
+        });
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Global shortcuts (SRS ch.6).
   useEffect(() => {

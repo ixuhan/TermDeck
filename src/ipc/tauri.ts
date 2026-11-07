@@ -1,9 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { DetectedShell, DirListing, HistoryItem, Preset, ShellProfile } from "../types";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import type {
+  DetectedShell,
+  DirListing,
+  HistoryItem,
+  InstallKind,
+  Preset,
+  ShellProfile,
+  UpdateInfo,
+} from "../types";
 import type { Ipc, PersistedWorkspace } from "./types";
 
 export function createTauriIpc(): Ipc {
+  // Held between checkUpdate and installUpdate: the plugin hands out an
+  // Update handle that carries the resolved download URL and signature.
+  let pending: Update | null = null;
+
   return {
     isMock: false,
 
@@ -80,6 +94,34 @@ export function createTauriIpc(): Ipc {
     readDirectory: (path) => invoke<DirListing>("read_directory", { path }),
 
     openPath: (path) => invoke("open_path", { path }),
+
+    checkUpdate: async () => {
+      const update = await check();
+      pending = update;
+      if (!update) return null;
+      return {
+        version: update.version,
+        notes: update.body ?? null,
+        date: update.date ?? null,
+      };
+    },
+
+    installUpdate: async (onProgress) => {
+      if (!pending) throw new Error("没有待安装的更新，请先检查更新");
+      let total = 0;
+      let done = 0;
+      await pending.downloadAndInstall((event) => {
+        if (event.event === "Started") {
+          total = event.data.contentLength ?? 0;
+        } else if (event.event === "Progress") {
+          done += event.data.chunkLength;
+          onProgress(done, total);
+        }
+      });
+      await relaunch();
+    },
+
+    installKind: () => invoke<InstallKind>("install_kind"),
 
     dataDir: () => invoke<string>("data_dir"),
     openDataDir: () => invoke("open_data_dir"),

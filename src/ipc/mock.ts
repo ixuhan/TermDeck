@@ -386,6 +386,24 @@ export function createMockIpc(): Ipc {
       console.log("[mock] open with default app:", path);
     },
 
+    async checkUpdate() {
+      // Browser preview: pretend a newer version exists so the settings panel
+      // can be exercised without a real release endpoint.
+      return {
+        version: "0.4.0",
+        notes: "这是浏览器预览环境，不会真的下载安装。",
+        date: new Date().toISOString(),
+      };
+    },
+
+    async installUpdate() {
+      throw new Error("浏览器预览环境不支持自动更新");
+    },
+
+    async installKind() {
+      return "installed" as const;
+    },
+
     async dataDir() {
       return "浏览器预览模式 · 数据存于 localStorage";
     },
