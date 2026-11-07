@@ -50,6 +50,8 @@ export interface Layout {
   rightWidth: number;
   rightCollapsed: boolean;
   dirHeight: number;
+  /** Height of the serial port list in the left rail. */
+  portHeight: number;
 }
 
 const defaultDir = (path: string): DirPanelState => ({
@@ -171,7 +173,13 @@ export const useStore = create<Store>((set, get) => {
     mode: "input",
     manualLock: false,
     settingsOpen: false,
-    layout: { leftWidth: 240, rightWidth: 300, rightCollapsed: false, dirHeight: 240 },
+    layout: {
+      leftWidth: 240,
+      rightWidth: 300,
+      rightCollapsed: false,
+      dirHeight: 240,
+      portHeight: 190,
+    },
     presets: DEFAULT_PRESETS,
     settings: DEFAULT_SETTINGS,
     lastError: null,
@@ -244,6 +252,7 @@ export const useStore = create<Store>((set, get) => {
             rightWidth: saved.window?.right_sidebar_width ?? 300,
             rightCollapsed: saved.window?.right_sidebar_collapsed ?? false,
             dirHeight: saved.window?.right_dir_height ?? 240,
+            portHeight: saved.window?.left_ports_height ?? 190,
           },
           ready: true,
         });
@@ -674,6 +683,7 @@ export const useStore = create<Store>((set, get) => {
           right_sidebar_width: s.layout.rightWidth,
           right_sidebar_collapsed: s.layout.rightCollapsed,
           right_dir_height: s.layout.dirHeight,
+          left_ports_height: s.layout.portHeight,
         },
         active_session_id: s.activeKey,
         sessions: s.sessions.map((x) => ({

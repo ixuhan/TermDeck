@@ -21,6 +21,7 @@ export interface PersistedWorkspace {
     right_sidebar_width: number;
     right_sidebar_collapsed: boolean;
     right_dir_height?: number;
+    left_ports_height?: number;
   };
   active_session_id: string | null;
   sessions: Array<{

@@ -1,8 +1,9 @@
 /**
- * Serial port panel: the list is read-only and refresh is manual by default.
- *
- * Also documents the real hardware the enumeration produced, so a regression
- * (e.g. ports disappearing because a filter got too strict) is visible.
+ * Serial port panel:
+ *   - lists real COM ports (read-only)
+ *   - height is draggable via the same handle the right sidebar uses
+ *   - collapses to a header row
+ *   - 1 Hz refresh is opt-in and shows a live "last refreshed" line
  */
 import { chromium } from "playwright";
 import { spawn, execSync } from "node:child_process";
@@ -48,6 +49,9 @@ const child = spawn(EXE, [], {
 });
 child.unref();
 
+const panelHeight = (page) =>
+  page.locator(".rail-ports").evaluate((el) => Math.round(el.getBoundingClientRect().height));
+
 try {
   await waitForCdp();
   const browser = await chromium.connectOverCDP("http://127.0.0.1:9222");
@@ -56,59 +60,76 @@ try {
   await page.waitForSelector(".rail-ports", { timeout: 25000 });
   await wait(2500);
 
-  const badge = (await page.locator(".ports-count").innerText()).trim();
-  out.push(`INFO panel count: ${badge}`);
-
   const rows = await page.locator(".port-item").allInnerTexts();
   out.push(`INFO ports: ${JSON.stringify(rows)}`);
-
-  // The machine has at least COM1 (motherboard); adapters are often absent.
-  ok("面板已渲染", (await page.locator(".rail-ports").count()) === 1);
   ok("枚举到串口", rows.length > 0, `${rows.length} 条`);
-  ok("端口名形如 COMx", rows.every((r) => /^COM\d+/.test(r.trim())), rows.join(" | "));
+  ok("端口名形如 COMx", rows.every((r) => /^COM\d+/.test(r.trim())), "");
   ok(
     "数量与标题一致",
-    String(rows.length) === badge,
-    `count=${badge} rows=${rows.length}`,
+    String(rows.length) === (await page.locator(".ports-count").innerText()).trim(),
+    "",
   );
+  ok("默认是手动刷新", (await page.locator(".ports-live").count()) === 0);
 
-  // Manual refresh must not throw and must keep the list stable.
-  await page.locator(".ports-refresh").click();
-  await wait(1200);
-  const after = await page.locator(".port-item").allInnerTexts();
-  ok("手动刷新后列表一致", after.length === rows.length, `${rows.length} -> ${after.length}`);
+  // ---- drag handle ---------------------------------------------------------
+  const before = await panelHeight(page);
+  const handle = page.locator(".rail .resizer-h").first();
+  ok("存在拖拽条", (await handle.count()) === 1);
+  const box = await handle.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y - 90, { steps: 10 });
+  await page.mouse.up();
+  await wait(500);
+  const after = await panelHeight(page);
+  out.push(`INFO height ${before} -> ${after}`);
+  ok("向上拖拽变高", after > before + 40, `${before} -> ${after}`);
 
-  // Collapse hides the list but keeps the header.
-  await page.locator(".ports-toggle").click();
-  await wait(400);
-  ok("收起后列表隐藏", (await page.locator(".ports-list").count()) === 0);
-  ok("收起后标题仍在", (await page.locator(".ports-toggle").count()) === 1);
+  // Drag back down and make sure it can shrink too.
+  const box2 = await handle.boundingBox();
+  await page.mouse.move(box2.x + box2.width / 2, box2.y + box2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box2.x + box2.width / 2, box2.y + 90, { steps: 10 });
+  await page.mouse.up();
+  await wait(500);
+  const shrunk = await panelHeight(page);
+  ok("向下拖拽变矮", shrunk < after - 40, `${after} -> ${shrunk}`);
+
+  // ---- collapse ------------------------------------------------------------
+  const collapseBtn = page.locator(".rail-ports .dir-actions button").nth(1);
+  await collapseBtn.click();
+  await wait(500);
+  ok("折叠后列表隐藏", (await page.locator(".ports-list").count()) === 0);
+  ok("折叠后拖拽条消失", (await page.locator(".rail .resizer-h").count()) === 0);
+  const collapsed = await panelHeight(page);
+  ok("折叠后只剩标题行", collapsed < 60, `h=${collapsed}`);
   await page.screenshot({ path: "shots/port01-collapsed.png" });
 
-  await page.locator(".ports-toggle").click();
-  await wait(400);
-  await page.screenshot({ path: "shots/port02-list.png" });
+  await collapseBtn.click();
+  await wait(600);
+  ok("展开后高度还原", Math.abs((await panelHeight(page)) - shrunk) <= 2, "");
 
-  // 1 Hz polling is opt-in and persisted, so a previous interrupted run may
-  // have left it on. Reset first, then assert the toggle actually works.
-  const checkbox = page.locator(".ports-auto-check");
-  if (await checkbox.isChecked()) {
-    await checkbox.uncheck();
-  await wait(300);
-    await wait(400);
-  }
-  ok("自动刷新关闭时不再轮询", !(await checkbox.isChecked()));
-  await checkbox.check();
-  await wait(2600);
-  const polled = await page.locator(".port-item").allInnerTexts();
-  ok("开启 1s 刷新后列表仍正常", polled.length === rows.length, `${polled.length}`);
-  const persisted = await page.evaluate(() => {
-    return window.__TAURI_INTERNALS__?.invoke("settings_load").then
-      ? window.__TAURI_INTERNALS__.invoke("settings_load")
-      : null;
-  });
-  out.push(`INFO settings persisted: ${JSON.stringify(persisted)}`);
-  await checkbox.uncheck();
+  // ---- 1 Hz mode -----------------------------------------------------------
+  const oneSec = page.locator(".rail-ports .dir-mode button").nth(1);
+  await oneSec.click();
+  await wait(1600);
+  ok("开启后出现状态行", (await page.locator(".ports-live").count()) === 1);
+  const t1 = (await page.locator(".ports-live").innerText()).trim();
+  out.push(`INFO live text #1: ${t1}`);
+  ok("状态行显示刷新时间", /\d{2}:\d{2}:\d{2}/.test(t1), t1);
+
+  await wait(2200);
+  const t2 = (await page.locator(".ports-live").innerText()).trim();
+  out.push(`INFO live text #2: ${t2}`);
+  ok("时间随时间推进", t1 !== t2, `${t1} -> ${t2}`);
+  ok("轮询期间列表稳定", (await page.locator(".port-item").count()) === rows.length, "");
+
+  const manual = page.locator(".rail-ports .dir-mode button").nth(0);
+  await manual.click();
+  await wait(600);
+  ok("切回手动后状态行消失", (await page.locator(".ports-live").count()) === 0);
+
+  await page.screenshot({ path: "shots/port02-list.png" });
 } finally {
   console.log(out.join("\n"));
   const fails = out.filter((l) => l.startsWith("FAIL"));

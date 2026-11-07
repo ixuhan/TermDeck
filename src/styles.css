@@ -1684,51 +1684,28 @@ body.is-resizing-v {
 }
 
 /* ------------------------------------------------------------ serial ports */
+/*
+ * Mirrors the right sidebar: a horizontal drag handle above the panel, a
+ * segmented control and SVG icon buttons in the header, and the same chevron
+ * used to collapse the directory panel.
+ */
 
 .rail-ports {
-  /* Never shrink: the session list above is the flexible one. Without this the
-     port list gets squeezed to three rows when a session is added. */
+  /* Never shrink: the session list above is the flexible one. */
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   border-top: 1px solid var(--border);
   background: var(--panel-2);
-}
-
-.rail-ports.is-open {
-  max-height: 240px;
 }
 
 .ports-head {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 6px 4px 4px;
+  gap: 7px;
+  padding: 5px 8px;
   flex: 0 0 auto;
-}
-
-.ports-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 2px 4px;
-  border-radius: 5px;
-  font-size: 11.5px;
-  color: var(--text-dim);
-  letter-spacing: 0.02em;
-}
-
-.ports-toggle:hover {
-  background: #eef1f5;
-  color: var(--text);
-}
-
-.ports-caret {
-  font-size: 9px;
-  width: 9px;
-  color: var(--text-faint);
 }
 
 .ports-count {
@@ -1741,26 +1718,43 @@ body.is-resizing-v {
   font-size: 10px;
   line-height: 15px;
   text-align: center;
+  flex: 0 0 auto;
 }
 
-.ports-refresh {
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  color: var(--text-faint);
-  font-size: 12px;
-  line-height: 1;
-  display: inline-flex;
+.ports-head .dir-mode {
+  margin-left: auto;
+}
+
+.ports-live {
+  display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 5px;
+  padding: 0 10px 5px;
+  font-size: 10px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  flex: 0 0 auto;
 }
 
-.ports-refresh:hover {
-  background: #eef1f5;
-  color: var(--accent);
+.ports-pulse {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: port-pulse 1.2s ease-in-out infinite;
 }
 
-.ports-refresh.is-busy {
+@keyframes port-pulse {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.dir-actions button.is-busy svg {
   animation: port-spin 0.9s linear infinite;
 }
 
@@ -1770,29 +1764,9 @@ body.is-resizing-v {
   }
 }
 
-.ports-auto {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 10.5px;
-  color: var(--text-faint);
-  cursor: pointer;
-  padding-left: 2px;
-}
-
-.ports-auto-check {
-  width: 12px;
-  height: 12px;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
 .ports-list {
-  /* Height follows the content up to the cap; a fixed height would leave a
-     large empty block when the machine only has one port. */
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: 200px;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 0 6px;
