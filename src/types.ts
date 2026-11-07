@@ -52,6 +52,15 @@ export interface Session {
   dir: DirPanelState;
 }
 
+/** One entry from the read-only serial port list. */
+export interface SerialPort {
+  name: string;
+  kind: "usb" | "pci" | "bluetooth" | "unknown";
+  label: string;
+  vid: number | null;
+  pid: number | null;
+}
+
 export interface UpdateInfo {
   version: string;
   notes: string | null;
@@ -127,6 +136,8 @@ export interface Settings {
   lazySpawn: boolean;
   /** Repaint the previous screen contents when a session is (re)started. */
   restoreScrollback: boolean;
+  /** Poll the serial port list every second while the panel is open. */
+  serialAutoRefresh: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -142,4 +153,5 @@ export const DEFAULT_SETTINGS: Settings = {
   webgl: true,
   lazySpawn: true,
   restoreScrollback: true,
+  serialAutoRefresh: false,
 };

@@ -4,6 +4,7 @@ import type {
   HistoryItem,
   InstallKind,
   Preset,
+  SerialPort,
   ShellProfile,
   UpdateInfo,
 } from "../types";
@@ -111,6 +112,9 @@ export interface Ipc {
   scrollbackSave(sessionKey: string, data: string): Promise<void>;
   scrollbackLoad(sessionKey: string): Promise<string | null>;
   scrollbackClear(sessionKey: string): Promise<void>;
+
+  /** Read-only COM port listing; no port is opened on the backend side. */
+  listSerialPorts(): Promise<SerialPort[]>;
 
   /** Portable builds keep their data next to the exe and must not self-update. */
   installKind(): Promise<InstallKind>;

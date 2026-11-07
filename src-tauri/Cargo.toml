@@ -26,6 +26,12 @@ uuid = { version = "1", features = ["v4"] }
 # against the public key compiled into the binary.
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+# Enumerates COM ports through SetupAPI; display-only, never opened.
+serialport = "4"
+
+[target."cfg(windows)".dependencies]
+# SetupAPI, only to read the friendlier device description that serialport omits.
+windows-sys = { version = "0.61", features = ["Win32_Devices_DeviceAndDriverInstallation", "Win32_Foundation"] }
 
 [profile.release]
 # No LTO on purpose. Thin LTO re-processes every dependency's codegen units on

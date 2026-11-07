@@ -283,6 +283,19 @@ pub fn scrollback_clear(
     }
 }
 
+// ---------------------------------------------------------------- serial ports
+//
+// Read-only enumeration: no port is opened, configured or written to. The UI
+// only lists what Windows reports, plus a refresh button.
+
+#[tauri::command]
+pub fn list_serial_ports() -> Result<Vec<crate::ports::PortEntry>, String> {
+    crate::ports::list().map_err(|e| {
+        crate::logging::warn(format!("list_serial_ports failed: {e}"));
+        e
+    })
+}
+
 #[tauri::command]
 pub fn install_kind() -> String {
     if crate::workspace::is_portable() {

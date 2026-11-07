@@ -8,6 +8,7 @@ import type {
   HistoryItem,
   InstallKind,
   Preset,
+  SerialPort,
   ShellProfile,
   UpdateInfo,
 } from "../types";
@@ -128,6 +129,8 @@ export function createTauriIpc(): Ipc {
       invoke<string | null>("scrollback_load", { sessionKey }),
 
     scrollbackClear: (sessionKey) => invoke("scrollback_clear", { sessionKey }),
+
+    listSerialPorts: () => invoke<SerialPort[]>("list_serial_ports"),
 
     installKind: () => invoke<InstallKind>("install_kind"),
 

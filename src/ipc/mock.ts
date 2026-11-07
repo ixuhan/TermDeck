@@ -1,7 +1,14 @@
 import { fuzzyScore } from "../fuzzy";
 import { maskSecrets } from "../mask";
 import { mockListing } from "./mockFs";
-import type { DetectedShell, DirListing, HistoryItem, Preset, ShellProfile } from "../types";
+import type {
+  DetectedShell,
+  DirListing,
+  HistoryItem,
+  Preset,
+  SerialPort,
+  ShellProfile,
+} from "../types";
 import type { Ipc, PersistedWorkspace } from "./types";
 
 /**
@@ -411,6 +418,15 @@ export function createMockIpc(): Ipc {
 
     async scrollbackClear(sessionKey) {
       localStorage.removeItem(`termdeck.scrollback.${sessionKey}`);
+    },
+
+    async listSerialPorts() {
+      // Browser preview: a plausible mix so the panel can be exercised.
+      return [
+        { name: "COM3", kind: "usb" as const, label: "USB-SERIAL CH340", vid: 6790, pid: 29987 },
+        { name: "COM5", kind: "usb" as const, label: "Silicon Labs CP210x", vid: 4292, pid: 60000 },
+        { name: "COM1", kind: "pci" as const, label: "主板串口", vid: null, pid: null },
+      ];
     },
 
     async installKind() {

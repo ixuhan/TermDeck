@@ -137,11 +137,11 @@ ok("settings-open", modalRows >= 5, `${modalRows} rows`);
 await page.screenshot({ path: `${OUT}/09-settings.png` });
 
 // toggle ghost text off, verify persistence in localStorage
-await page.locator(".set-check").first().uncheck();
+await page.locator(".modal .set-check").first().uncheck();
 await page.waitForTimeout(400);
 const stored = await page.evaluate(() => localStorage.getItem("termdeck.settings"));
 ok("settings-persisted", (stored ?? "").includes("ghostText"), stored ?? "");
-await page.locator(".set-check").first().check();
+await page.locator(".modal .set-check").first().check();
 await page.locator(".modal-foot .mini-btn").click();
 await page.waitForTimeout(200);
 

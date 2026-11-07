@@ -97,9 +97,9 @@ try {
   for (const marker of ["scr-a", "scr-b", "scr-c"]) {
     await input.fill(`echo scrollback-${marker}`);
     await page.keyboard.press("Enter");
-    await wait(900);
+    await wait(1300);
   }
-  await wait(500);
+  await wait(800);
 
   const screenBefore = await page.locator(".xterm-rows").innerText().catch(() => "");
   ok("命令输出出现在屏幕上", screenBefore.includes("scrollback-scr-c"), `len=${screenBefore.length}`);
@@ -144,6 +144,21 @@ try {
   await wait(900);
   const recalled = await inputAfter.inputValue();
   ok("历史仍是真实命令", recalled === "echo scrollback-scr-c", recalled);
+
+  // Restart again: the separator must not stack up on every launch.
+  kill(child);
+  await wait(4500);
+  child = launch();
+  await waitForCdp();
+  await wait(1500);
+  browser = await chromium.connectOverCDP("http://127.0.0.1:9222");
+  page = browser.contexts()[0].pages()[0];
+  await page.waitForSelector(".cmd-input", { timeout: 25000 });
+  await wait(4000);
+  const screenThird = await page.locator(".xterm-rows").innerText().catch(() => "");
+  const marks = (screenThird.match(/以上为上次会话的输出/g) || []).length;
+  ok("分隔线不随重启累积", marks === 1, `出现 ${marks} 次`);
+  ok("内容依然在", screenThird.includes("scrollback-scr-c"), "");
 } finally {
   console.log(out.join("\n"));
   const fails = out.filter((l) => l.startsWith("FAIL"));

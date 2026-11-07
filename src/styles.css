@@ -1682,3 +1682,192 @@ body.is-resizing-v {
   background: var(--accent);
   transition: width 0.2s ease;
 }
+
+/* ------------------------------------------------------------ serial ports */
+
+.rail-ports {
+  /* Never shrink: the session list above is the flexible one. Without this the
+     port list gets squeezed to three rows when a session is added. */
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--panel-2);
+}
+
+.rail-ports.is-open {
+  max-height: 240px;
+}
+
+.ports-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 4px;
+  flex: 0 0 auto;
+}
+
+.ports-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 4px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+}
+
+.ports-toggle:hover {
+  background: #eef1f5;
+  color: var(--text);
+}
+
+.ports-caret {
+  font-size: 9px;
+  width: 9px;
+  color: var(--text-faint);
+}
+
+.ports-count {
+  min-width: 16px;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: #e6eaf0;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
+}
+
+.ports-refresh {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ports-refresh:hover {
+  background: #eef1f5;
+  color: var(--accent);
+}
+
+.ports-refresh.is-busy {
+  animation: port-spin 0.9s linear infinite;
+}
+
+@keyframes port-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ports-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding-left: 2px;
+}
+
+.ports-auto-check {
+  width: 12px;
+  height: 12px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.ports-list {
+  /* Height follows the content up to the cap; a fixed height would leave a
+     large empty block when the machine only has one port. */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0 6px;
+}
+
+.ports-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ports-list::-webkit-scrollbar-thumb {
+  background: #d3d8e0;
+  border-radius: 4px;
+  border: 2px solid var(--panel-2);
+}
+
+.ports-empty {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.6;
+}
+
+.port-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  cursor: default;
+  user-select: text;
+}
+
+.port-item:hover {
+  background: #eef1f5;
+}
+
+.port-name {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  flex: 0 0 auto;
+}
+
+.port-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+
+.port-kind {
+  flex: 0 0 auto;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  padding: 0 4px;
+  border-radius: 3px;
+  line-height: 14px;
+  background: #e6eaf0;
+  color: var(--text-faint);
+}
+
+.port-kind.is-usb {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.port-kind.is-pci {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.port-kind.is-bluetooth {
+  background: #e8e3fa;
+  color: #6b47c9;
+}

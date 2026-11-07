@@ -33,8 +33,24 @@ const THEME = {
   brightWhite: "#8c959f",
 };
 
+const RESTORE_TEXT = "以上为上次会话的输出";
+
 /** Written between the restored screen and the new shell's first prompt. */
-const RESTORE_MARK = "\r\n\x1b[38;5;245m──── 以上为上次会话的输出 ────\x1b[0m\r\n";
+const RESTORE_MARK = `\r\n\x1b[38;5;245m──── ${RESTORE_TEXT} ────\x1b[0m\r\n`;
+
+/**
+ * Drops previously written separators before saving.
+ *
+ * The screen is persisted verbatim, so without this every restart would add one
+ * more separator and the snapshot would slowly fill up with them.
+ */
+function stripRestoreMarks(text: string): string {
+  if (!text.includes(RESTORE_TEXT)) return text;
+  return text
+    .split(/\r?\n/)
+    .filter((line) => !line.includes(RESTORE_TEXT))
+    .join("\r\n");
+}
 
 /** Give the shell a moment to settle before serializing the whole buffer. */
 const SAVE_DEBOUNCE_MS = 3000;
@@ -102,7 +118,9 @@ export function TerminalView({ session, active }: { session: Session; active: bo
       if (disposed) return "";
       try {
         if (term.buffer.active.type !== "normal") return "";
-        return serialize.serialize({ scrollback: Math.min(scrollback, MAX_SERIALIZED_LINES) });
+        return stripRestoreMarks(
+          serialize.serialize({ scrollback: Math.min(scrollback, MAX_SERIALIZED_LINES) }),
+        );
       } catch {
         return "";
       }
@@ -200,9 +218,11 @@ export function TerminalView({ session, active }: { session: Session; active: bo
       if (stillExists) {
         try {
           if (term.buffer.active.type === "normal") {
-            const data = serialize.serialize({
-              scrollback: Math.min(scrollback, MAX_SERIALIZED_LINES),
-            });
+            const data = stripRestoreMarks(
+              serialize.serialize({
+                scrollback: Math.min(scrollback, MAX_SERIALIZED_LINES),
+              }),
+            );
             if (data) void ipc.scrollbackSave(session.key, data).catch(() => undefined);
           }
         } catch {

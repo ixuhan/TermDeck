@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ipc } from "../ipc";
 import { useStore } from "../store";
 import type { DetectedShell } from "../types";
+import { SerialPortsPanel } from "./SerialPortsPanel";
 
 export function LeftRail() {
   const sessions = useStore((s) => s.sessions);
@@ -170,6 +171,8 @@ export function LeftRail() {
           </div>
         )}
       </div>
+
+      <SerialPortsPanel />
     </aside>
   );
 }

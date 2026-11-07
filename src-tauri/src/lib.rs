@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod fsview;
+pub mod ports;
 pub mod history;
 pub mod logging;
 pub mod models;
@@ -64,6 +65,7 @@ pub fn run() {
             commands::settings_load,
             commands::settings_save,
             commands::install_kind,
+            commands::list_serial_ports,
             commands::scrollback_save,
             commands::scrollback_load,
             commands::scrollback_clear,
