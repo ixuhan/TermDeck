@@ -52,6 +52,32 @@ pub fn resolve_data_dir(app_data_fallback: PathBuf) -> PathBuf {
     app_data_fallback
 }
 
+/// True when the binary is running from a folder the user extracted by hand
+/// rather than from an installer-created location.
+///
+/// This deliberately does NOT look at the `data` directory: that directory is
+/// always created beside the exe when the location is writable, so it cannot
+/// tell the two cases apart. What actually differs is where the exe lives -
+/// installers put it under LOCALAPPDATA or Program Files.
+pub fn is_portable() -> bool {
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    let Some(dir) = exe.parent() else {
+        return false;
+    };
+    let dir = dir.to_string_lossy().to_lowercase();
+
+    for var in ["LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432"] {
+        if let Ok(root) = std::env::var(var) {
+            if !root.is_empty() && dir.starts_with(&root.to_lowercase()) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 fn is_writable(dir: &Path) -> bool {
     let probe = dir.join(".write-probe");
     match fs::File::create(&probe) {
@@ -100,4 +126,16 @@ pub fn read_with_backup(path: &Path) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn portable_detection_does_not_panic() {
+        // Runs from the cargo target dir in CI, so it must classify as portable
+        // without touching the filesystem.
+        let _ = is_portable();
+    }
 }

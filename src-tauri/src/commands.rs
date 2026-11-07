@@ -210,15 +210,8 @@ pub fn settings_save(app_state: State<'_, AppState>, json: String) -> Result<(),
 /// The updater must not run in a portable copy: it would install into
 /// `%LOCALAPPDATA%` and leave the user with two copies, one of them stale.
 #[tauri::command]
-pub fn install_kind(app_state: State<'_, AppState>) -> String {
-    let data_dir = app_state.paths.dir();
-    let beside_exe = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join("data")))
-        .map(|dir| dir == data_dir)
-        .unwrap_or(false);
-
-    if beside_exe {
+pub fn install_kind() -> String {
+    if crate::workspace::is_portable() {
         "portable".to_string()
     } else {
         "installed".to_string()
