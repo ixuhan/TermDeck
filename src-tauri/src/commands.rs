@@ -296,6 +296,48 @@ pub fn list_serial_ports() -> Result<Vec<crate::ports::PortEntry>, String> {
     })
 }
 
+// ------------------------------------------------------------------ shell menu
+
+/// Pops the real Explorer context menu for `path` at the given client coords.
+///
+/// Runs on the window thread because `TrackPopupMenu` needs a message loop and
+/// blocks until the user picks something or dismisses the menu.
+#[tauri::command]
+pub async fn show_context_menu(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    path: String,
+    x: f64,
+    y: f64,
+) -> Result<(), String> {
+    #[cfg(not(windows))]
+    {
+        let _ = (&app, &window, &path, x, y);
+        return Err("当前平台不支持资源管理器右键菜单".into());
+    }
+
+    #[cfg(windows)]
+    {
+        // CSS pixels -> physical pixels, then the shell does the screen mapping.
+        let scale = window.scale_factor().map_err(|e| e.to_string())?;
+        let raw = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
+        let px = (x * scale).round() as i32;
+        let py = (y * scale).round() as i32;
+
+        let (tx, rx) = std::sync::mpsc::channel::<Result<(), String>>();
+        app.run_on_main_thread(move || {
+            let hwnd = crate::shellmenu::hwnd_from_raw(raw);
+            let _ = tx.send(crate::shellmenu::show(&path, hwnd, px, py));
+        })
+        .map_err(|e| e.to_string())?;
+
+        tauri::async_runtime::spawn_blocking(move || rx.recv())
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?
+    }
+}
+
 #[tauri::command]
 pub fn install_kind() -> String {
     if crate::workspace::is_portable() {

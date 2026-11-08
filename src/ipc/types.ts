@@ -114,6 +114,12 @@ export interface Ipc {
   scrollbackLoad(sessionKey: string): Promise<string | null>;
   scrollbackClear(sessionKey: string): Promise<void>;
 
+  /**
+   * Pops the real Windows Explorer context menu for `path` at the given client
+   * coordinates. Resolves once the menu is dismissed.
+   */
+  showContextMenu(path: string, x: number, y: number): Promise<void>;
+
   /** Read-only COM port listing; no port is opened on the backend side. */
   listSerialPorts(): Promise<SerialPort[]>;
 

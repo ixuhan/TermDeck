@@ -247,6 +247,15 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
             onDoubleClick={() => {
               if (!e.isDir) void openFile(e.path);
             }}
+            onContextMenu={(ev) => {
+              // Hand it to the shell so the menu is the same one Explorer shows,
+              // third-party entries included.
+              ev.preventDefault();
+              setSelected(e.path);
+              void ipc
+                .showContextMenu(e.path, ev.clientX, ev.clientY)
+                .catch((err) => showToast(String(err)));
+            }}
           >
             <span className={`dir-icon ${e.isDir ? "is-dir" : "is-file"}`}>
               {e.isDir ? <FolderIcon /> : <FileIcon />}

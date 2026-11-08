@@ -132,6 +132,8 @@ export function createTauriIpc(): Ipc {
 
     listSerialPorts: () => invoke<SerialPort[]>("list_serial_ports"),
 
+    showContextMenu: (path, x, y) => invoke("show_context_menu", { path, x, y }),
+
     installKind: () => invoke<InstallKind>("install_kind"),
 
     dataDir: () => invoke<string>("data_dir"),

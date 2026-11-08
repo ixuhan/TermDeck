@@ -420,6 +420,11 @@ export function createMockIpc(): Ipc {
       localStorage.removeItem(`termdeck.scrollback.${sessionKey}`);
     },
 
+    async showContextMenu() {
+      // Browser preview has no shell; the hook exists so the UI compiles and
+      // the right-click does not fall through to the browser menu.
+    },
+
     async listSerialPorts() {
       // Browser preview: a plausible mix so the panel can be exercised.
       return [

@@ -32,6 +32,13 @@ serialport = "4"
 [target."cfg(windows)".dependencies]
 # SetupAPI, only to read the friendlier device description that serialport omits.
 windows-sys = { version = "0.61", features = ["Win32_Devices_DeviceAndDriverInstallation", "Win32_Foundation"] }
+# Real Explorer context menu (IContextMenu), so shell extensions show up too.
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
 
 [profile.release]
 # No LTO on purpose. Thin LTO re-processes every dependency's codegen units on

@@ -14,6 +14,13 @@
 - CI 构建时用 `TAURI_SIGNING_PRIVATE_KEY` 签名并生成 `latest.json`
 - 文档：[docs/UPDATER.md](UPDATER.md)
 
+### 文件目录右键菜单
+
+- 右键文件/文件夹弹出**真正的资源管理器菜单**（`IContextMenu`），而不是自绘菜单
+- 因此「打开方式」「发送到」、属性、回收站删除，以及装过的 7-Zip / TortoiseGit 等
+  shell 扩展都会出现，行为与 Explorer 完全一致
+- 菜单在窗口线程用 `TrackPopupMenu` 弹出（需要消息循环），前端坐标按 DPI 缩放到物理像素
+
 ### 串口列表
 
 - 左侧栏底部新增串口面板，显示端口名、设备描述与类型标签（USB / PCI / BT）

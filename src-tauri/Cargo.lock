@@ -3895,6 +3895,7 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-updater",
  "uuid",
+ "windows",
  "windows-sys 0.61.2",
 ]
 
