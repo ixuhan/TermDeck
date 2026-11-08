@@ -7,6 +7,10 @@ import type {
   Preset,
   PresetItem,
   QuickItem,
+  SerialConfig,
+  SerialLogConfig,
+  SerialState,
+  SerialView,
   Session,
   Settings,
   ShellProfile,
@@ -77,6 +81,15 @@ interface Store {
 
   boot: () => Promise<void>;
   createSession: (profile?: ShellProfile) => Promise<void>;
+  /** Creates and opens a serial session. Throws into lastError if the port is busy. */
+  createSerialSession: (config: SerialConfig) => Promise<void>;
+  pauseSerial: (key: string) => Promise<void>;
+  resumeSerial: (key: string) => Promise<void>;
+  /** Applies view/log changes; a config change reopens the port. */
+  updateSerial: (
+    key: string,
+    patch: { config?: SerialConfig; view?: SerialView; log?: SerialLogConfig },
+  ) => Promise<void>;
   closeSession: (key: string) => Promise<void>;
   activate: (key: string) => void;
   renameSession: (key: string, title: string) => void;
@@ -146,6 +159,20 @@ export const useStore = create<Store>((set, get) => {
 
   /** Spawn the PTY for a session record that exists but has no runtime yet. */
   const spawn = async (session: Session): Promise<Session> => {
+    if (session.kind === "serial" && session.serial) {
+      const { config, view, log } = session.serial;
+      // The id is derived from the session key so one command surface can serve
+      // both PTY and serial streams.
+      await ipc.serialOpen(session.key, config, view, log);
+      return {
+        ...session,
+        ptyId: `serial:${session.key}`,
+        spawned: true,
+        alive: true,
+        exitCode: null,
+        serial: { ...session.serial, paused: false },
+      };
+    }
     const profile: ShellProfile = {
       ...session.profile,
       cwd: session.cwd || session.profile.cwd || null,
@@ -208,6 +235,9 @@ export const useStore = create<Store>((set, get) => {
           key: s.id || uid(),
           ptyId: null,
           title: s.title,
+          kind: s.kind ?? "pty",
+          // Ports are always reopened on boot, so paused never survives a restart.
+          serial: s.serial ? { ...s.serial, paused: false } : null,
           profile: {
             name: s.shell_profile.name,
             executable: s.shell_profile.executable,
@@ -318,6 +348,126 @@ export const useStore = create<Store>((set, get) => {
         }));
       } catch (err) {
         set({ lastError: `创建会话失败：${String(err)}` });
+      }
+      schedule();
+    },
+
+    async createSerialSession(config) {
+      // Two sessions on one COM port cannot coexist; the second open gets
+      // "access denied" from the driver, which is a confusing error to see.
+      const holder = get().sessions.find(
+        (x) => x.kind === "serial" && x.serial?.config.port === config.port && x.alive,
+      );
+      if (holder) {
+        set({
+          lastError: `${config.port} 已被会话「${holder.title}」占用，先暂停它再打开新会话`,
+        });
+        return;
+      }
+      const key = uid();
+      const draft: Session = {
+        key,
+        ptyId: null,
+        title: `${config.port} · ${config.baud}`,
+        kind: "serial",
+        serial: {
+          config,
+          view: { hex: false, crAsNewline: true, localEcho: false, sendNewline: "\r\n" },
+          log: { enabled: false, template: "logs/%Port/%Y%M%D-%h%m%s.log", hex: false },
+          paused: false,
+        },
+        // No shell: the profile is only a label so the shared Session shape holds.
+        profile: { name: config.port, executable: "", args: [], cwd: null, env: {} },
+        cwd: "",
+        spawned: false,
+        alive: false,
+        exitCode: null,
+        quickItems: toQuickItems(DEFAULT_QUICK),
+        dir: { visible: false, mode: "fixed", fixedPath: null, currentPath: "" },
+      };
+      set((s) => ({ sessions: [...s.sessions, draft], activeKey: draft.key }));
+      try {
+        const spawned = await spawn(draft);
+        set((s) => ({
+          sessions: s.sessions.map((x) => (x.key === draft.key ? spawned : x)),
+        }));
+      } catch (err) {
+        // Keep the session so the user can fix the settings and retry.
+        set({
+          lastError: `打开串口失败：${String(err)}`,
+          sessions: get().sessions.map((x) =>
+            x.key === draft.key ? { ...x, spawned: false, alive: false } : x,
+          ),
+        });
+      }
+      schedule();
+    },
+
+    async pauseSerial(key) {
+      try {
+        await ipc.serialPause(key);
+        set((s) => ({
+          sessions: s.sessions.map((x) =>
+            x.key === key && x.serial
+              ? { ...x, alive: false, serial: { ...x.serial, paused: true } }
+              : x,
+          ),
+        }));
+      } catch (e) {
+        set({ lastError: String(e) });
+      }
+    },
+
+    async resumeSerial(key) {
+      try {
+        await ipc.serialResume(key);
+        set((s) => ({
+          sessions: s.sessions.map((x) =>
+            x.key === key && x.serial
+              ? { ...x, alive: true, spawned: true, serial: { ...x.serial, paused: false } }
+              : x,
+          ),
+        }));
+      } catch (e) {
+        set({ lastError: `重新打开串口失败：${String(e)}` });
+      }
+    },
+
+    async updateSerial(key, patch) {
+      const current = get().sessions.find((x) => x.key === key);
+      if (!current?.serial) return;
+      const prev = current.serial;
+      const next = {
+        config: patch.config ?? prev.config,
+        view: patch.view ?? prev.view,
+        log: patch.log ?? prev.log,
+      };
+      const configChanged =
+        patch.config !== undefined && JSON.stringify(patch.config) !== JSON.stringify(prev.config);
+
+      try {
+        if (configChanged && current.alive) {
+          // Port parameters cannot change while open: close, apply, reopen.
+          await ipc.serialPause(key);
+          await ipc.serialUpdate(key, next.view, next.log, next.config);
+          await ipc.serialResume(key);
+        } else {
+          await ipc.serialUpdate(key, next.view, next.log, patch.config);
+        }
+        set((s) => ({
+          sessions: s.sessions.map((x) =>
+            x.key === key && x.serial
+              ? {
+                  ...x,
+                  title: `${next.config.port} · ${next.config.baud}`,
+                  alive: configChanged ? true : x.alive,
+                  serial: { ...x.serial, ...next, paused: false },
+                }
+              : x,
+          ),
+        }));
+      } catch (e) {
+        set({ lastError: `更新串口配置失败：${String(e)}` });
       }
       schedule();
     },
@@ -689,6 +839,8 @@ export const useStore = create<Store>((set, get) => {
         sessions: s.sessions.map((x) => ({
           id: x.key,
           title: x.title,
+          kind: x.kind ?? "pty",
+          serial: x.serial ?? null,
           shell_profile: {
             name: x.profile.name,
             executable: x.profile.executable,

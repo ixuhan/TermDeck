@@ -39,6 +39,64 @@ export interface Preset {
  * history, quick commands and React key. `ptyId` is the ephemeral runtime id of
  * the PTY process and changes every time the shell is (re)spawned.
  */
+export type SessionKind = "pty" | "serial";
+
+export interface SerialConfig {
+  port: string;
+  baud: number;
+  dataBits: number;
+  stopBits: number;
+  parity: "none" | "odd" | "even";
+  flow: "none" | "rtscts" | "xonxoff";
+  /** Some boards reset when DTR is asserted. */
+  dtr: boolean;
+  rts: boolean;
+}
+
+export type SendNewline = "\r\n" | "\r" | "\n" | "";
+
+export interface SerialView {
+  /** Render incoming bytes as a hex dump. */
+  hex: boolean;
+  /** Treat a lone \r as a line break (and a lone \n as \r\n). */
+  crAsNewline: boolean;
+  localEcho: boolean;
+  /** Appended to every send. Most firmware expects CR or CRLF. */
+  sendNewline: SendNewline;
+}
+
+export interface SerialLogConfig {
+  enabled: boolean;
+  /** %Y %M %D %h %m %s %Port %Baud %Date */
+  template: string;
+  hex: boolean;
+}
+
+export interface SerialState {
+  config: SerialConfig;
+  view: SerialView;
+  log: SerialLogConfig;
+  /** Port is closed while paused, so other software can use it. */
+  paused: boolean;
+}
+
+export const DEFAULT_SERIAL_VIEW: SerialView = {
+  hex: false,
+  crAsNewline: true,
+  localEcho: false,
+  sendNewline: "\r\n",
+};
+
+export const DEFAULT_SERIAL_LOG: SerialLogConfig = {
+  enabled: false,
+  template: "logs/%Port/%Y%M%D-%h%m%s.log",
+  hex: false,
+};
+
+export const COMMON_BAUDS = [
+  1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
+];
+
 export interface Session {
   key: string;
   ptyId: string | null;
@@ -50,6 +108,9 @@ export interface Session {
   exitCode: number | null;
   quickItems: QuickItem[];
   dir: DirPanelState;
+  /** Absent on records restored from older workspaces. */
+  kind?: SessionKind;
+  serial?: SerialState | null;
 }
 
 /** One entry from the read-only serial port list. */

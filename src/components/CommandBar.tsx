@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ipc } from "../ipc";
 import { trackCwd } from "../cwd";
+import { parseHexInput } from "../hex";
 import { ui } from "../focusBus";
 import { useStore } from "../store";
 import type { HistoryItem, Session } from "../types";
@@ -174,6 +175,43 @@ export function CommandBar({ session }: { session: Session }) {
   // ---------------------------------------------------------------- submitting
   const submit = useCallback(() => {
     const raw = value;
+
+    // A serial session has no shell: Enter sends bytes, not a command line.
+    // Read the live session, not the one captured by this callback: the session
+    // object gains `kind`/`serial` after creation while its key stays the same.
+    const live = useStore.getState().sessions.find((x) => x.key === session.key);
+    if (live?.kind === "serial" && live.serial) {
+      const serial = live.serial;
+      const text = raw;
+      void (async () => {
+        try {
+          let bytes: number[] | null = serial.view.hex
+            ? parseHexInput(text)
+            : Array.from(new TextEncoder().encode(text));
+          if (bytes === null) {
+            useStore.getState().showToast("HEX 输入无效：只允许 0-9 A-F 与空格");
+            return;
+          }
+          bytes = bytes.concat(Array.from(new TextEncoder().encode(serial.view.sendNewline)));
+          await ipc.serialWriteBytes(session.key, bytes);
+          // Clear first: if recording history throws, the text is already gone
+          // and the user is not left staring at a payload that was sent.
+          setValue("");
+          setGhost("");
+          setCaretAtEnd(true);
+          setHistIndex(null);
+          histDraftRef.current = "";
+          if (text.trim() !== "") {
+            // Kept as the session's send history, so ↑ can resend.
+            recordCommand(session.key, text, null);
+          }
+        } catch (e) {
+          useStore.getState().showToast(`发送失败：${String(e)}`);
+        }
+      })();
+      return;
+    }
+
     if (raw.trim() === "") {
       void writeToPty("\r");
       setValue("");

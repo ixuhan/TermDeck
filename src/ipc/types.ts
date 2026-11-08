@@ -4,10 +4,21 @@ import type {
   HistoryItem,
   InstallKind,
   Preset,
+  SerialConfig,
+  SerialLogConfig,
   SerialPort,
+  SerialState,
+  SerialView,
   ShellProfile,
   UpdateInfo,
 } from "../types";
+
+export interface SerialStatus {
+  open: boolean;
+  paused: boolean;
+  alive: boolean;
+  logPath: string | null;
+}
 
 export interface PersistedWorkspace {
   version: string;
@@ -27,6 +38,9 @@ export interface PersistedWorkspace {
   sessions: Array<{
     id: string;
     title: string;
+    /** Absent in workspaces written before serial sessions existed. */
+    kind?: "pty" | "serial";
+    serial?: SerialState | null;
     shell_profile: {
       name: string;
       executable: string;
@@ -119,6 +133,33 @@ export interface Ipc {
    * coordinates. Resolves once the menu is dismissed.
    */
   showContextMenu(path: string, x: number, y: number): Promise<void>;
+
+  /** Opens (or reopens) the serial port for a serial session. */
+  serialOpen(
+    sessionKey: string,
+    config: SerialConfig,
+    view: SerialView,
+    log: SerialLogConfig,
+  ): Promise<void>;
+
+  /** Closes the port so other software can claim it; data arriving while paused is lost. */
+  serialPause(sessionKey: string): Promise<void>;
+  serialResume(sessionKey: string): Promise<void>;
+
+  serialStatus(sessionKey: string): Promise<SerialStatus>;
+  /** Display/log changes apply immediately; `config` is stored for the next open. */
+  serialUpdate(
+    sessionKey: string,
+    view: SerialView,
+    log: SerialLogConfig,
+    config?: SerialConfig,
+  ): Promise<void>;
+
+  /** Sends raw bytes (hex input is decoded on the frontend). */
+  serialWriteBytes(sessionKey: string, bytes: number[]): Promise<void>;
+
+  /** Opens the folder containing this session's log file. */
+  serialRevealLog(sessionKey: string): Promise<void>;
 
   /** Read-only COM port listing; no port is opened on the backend side. */
   listSerialPorts(): Promise<SerialPort[]>;

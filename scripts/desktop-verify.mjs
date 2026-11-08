@@ -49,7 +49,12 @@ function launch() {
   const child = spawn(EXE, [], {
     detached: true,
     stdio: "ignore",
-    env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--remote-debugging-port=9222" },
+    env: {
+    ...process.env,
+    TERMDECK_TEST_HIDDEN: "1",
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
+      "--remote-debugging-port=9222 --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling",
+  },
   });
   child.unref();
   return child;

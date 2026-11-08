@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ipc } from "../ipc";
 import { useStore } from "../store";
-import type { DetectedShell } from "../types";
+import { COMMON_BAUDS, type DetectedShell, type Session } from "../types";
+import { SerialConfigDialog } from "./SerialConfigDialog";
 import { SerialPortsPanel } from "./SerialPortsPanel";
 
 export function LeftRail() {
@@ -19,6 +20,11 @@ export function LeftRail() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [baudFor, setBaudFor] = useState<string | null>(null);
+  const [configFor, setConfigFor] = useState<string | null>(null);
+  const pauseSerial = useStore((s) => s.pauseSerial);
+  const resumeSerial = useStore((s) => s.resumeSerial);
+  const updateSerial = useStore((s) => s.updateSerial);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -123,33 +129,115 @@ export function LeftRail() {
                     }}
                     onClick={(e) => e.stopPropagation()}
                   />
+                ) : s.kind === "serial" && s.serial ? (
+                  <span className="session-title serial-title">
+                    <span className="serial-port-name">{s.serial.config.port}</span>
+                    <button
+                      className={`serial-baud-pill ${s.alive ? "is-live" : ""}`}
+                      title="切换波特率（会重新打开串口）"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setBaudFor((v) => (v === s.key ? null : s.key));
+                      }}
+                    >
+                      {s.serial.config.baud}
+                    </button>
+                  </span>
                 ) : (
                   <span className="session-title">{s.title}</span>
                 )}
-                <span className="session-meta">
-                  {!s.spawned
-                    ? "未启动"
-                    : s.alive
-                      ? s.profile.executable.split(/[\\/]/).pop()
-                      : `已退出 · code ${s.exitCode ?? "?"}`}
-                </span>
-                {s.cwd && (
+
+                {s.kind === "serial" && s.serial ? (
+                  <span className="session-meta">
+                    {s.serial.config.dataBits}
+                    {s.serial.config.parity === "none"
+                      ? "N"
+                      : s.serial.config.parity === "odd"
+                        ? "O"
+                        : "E"}
+                    {s.serial.config.stopBits}
+                    {" · "}
+                    {s.serial.paused ? "已暂停（端口已释放）" : s.alive ? "已连接" : "未打开"}
+                  </span>
+                ) : (
+                  <span className="session-meta">
+                    {!s.spawned
+                      ? "未启动"
+                      : s.alive
+                        ? s.profile.executable.split(/[\\/]/).pop()
+                        : `已退出 · code ${s.exitCode ?? "?"}`}
+                  </span>
+                )}
+                {s.kind !== "serial" && s.cwd && (
                   <span className="session-cwd" title={s.cwd}>
                     {s.cwd}
                   </span>
                 )}
-                {s.spawned && !s.alive && (
-                  <button
-                    className="session-restart"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void restartSession(s.key);
-                    }}
-                  >
-                    ↻ 重启本会话
-                  </button>
+                {s.kind === "serial" && s.serial ? (
+                  <span className="serial-actions">
+                    <button
+                      title={s.serial.paused ? "继续（重新打开串口）" : "暂停（释放串口给其他程序）"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void (s.serial!.paused ? resumeSerial(s.key) : pauseSerial(s.key));
+                      }}
+                    >
+                      {s.serial.paused ? "▶" : "⏸"}
+                    </button>
+                    <button
+                      title="串口设置"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfigFor(s.key);
+                      }}
+                    >
+                      ⚙
+                    </button>
+                  </span>
+                ) : (
+                  s.spawned &&
+                  !s.alive && (
+                    <button
+                      className="session-restart"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void restartSession(s.key);
+                      }}
+                    >
+                      ↻ 重启本会话
+                    </button>
+                  )
                 )}
               </div>
+              {baudFor === s.key && s.serial && (
+                <div className="baud-menu" onClick={(e) => e.stopPropagation()}>
+                  <div className="baud-menu-head">波特率</div>
+                  {COMMON_BAUDS.map((b) => (
+                    <button
+                      key={b}
+                      className={s.serial!.config.baud === b ? "is-on" : ""}
+                      onClick={() => {
+                        setBaudFor(null);
+                        void updateSerial(s.key, {
+                          config: { ...s.serial!.config, baud: b },
+                        });
+                      }}
+                    >
+                      {b}
+                    </button>
+                  ))}
+                  <button
+                    className="baud-menu-more"
+                    onClick={() => {
+                      setBaudFor(null);
+                      setConfigFor(s.key);
+                    }}
+                  >
+                    自定义…
+                  </button>
+                </div>
+              )}
+
               <button
                 className="session-close"
                 title="关闭会话"
@@ -173,6 +261,13 @@ export function LeftRail() {
       </div>
 
       <SerialPortsPanel />
+
+      {configFor &&
+        (() => {
+          const target = sessions.find((x) => x.key === configFor);
+          if (!target?.serial) return null;
+          return <SerialConfigDialog session={target} onClose={() => setConfigFor(null)} />;
+        })()}
     </aside>
   );
 }

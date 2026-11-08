@@ -33,6 +33,7 @@ export function SerialPortsPanel() {
   const setSettings = useStore((s) => s.setSettings);
   const height = useStore((s) => s.layout.portHeight);
   const setLayout = useStore((s) => s.setLayout);
+  const createSerialSession = useStore((s) => s.createSerialSession);
 
   const [open, setOpen] = useState(true);
   const [ports, setPorts] = useState<SerialPort[]>([]);
@@ -165,6 +166,18 @@ export function SerialPortsPanel() {
               <div
                 className="port-item"
                 key={p.name}
+                onDoubleClick={() =>
+                  void createSerialSession({
+                    port: p.name,
+                    baud: 115200,
+                    dataBits: 8,
+                    stopBits: 1,
+                    parity: "none",
+                    flow: "none",
+                    dtr: true,
+                    rts: true,
+                  })
+                }
                 title={
                   p.vid != null && p.pid != null
                     ? `VID_${p.vid.toString(16).toUpperCase().padStart(4, "0")} PID_${p.pid
@@ -177,6 +190,25 @@ export function SerialPortsPanel() {
                 <span className="port-name">{p.name}</span>
                 <span className="port-label">{p.label}</span>
                 <span className={`port-kind is-${p.kind}`}>{KIND_BADGE[p.kind]}</span>
+                <button
+                  className="port-open"
+                  title="打开为串口会话"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void createSerialSession({
+                      port: p.name,
+                      baud: 115200,
+                      dataBits: 8,
+                      stopBits: 1,
+                      parity: "none",
+                      flow: "none",
+                      dtr: true,
+                      rts: true,
+                    });
+                  }}
+                >
+                  ＋
+                </button>
               </div>
             ))}
           </div>

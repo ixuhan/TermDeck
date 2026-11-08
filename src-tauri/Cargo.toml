@@ -28,6 +28,8 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 # Enumerates COM ports through SetupAPI; display-only, never opened.
 serialport = "4"
+# Log file name templates (%Y%M%D%h%m%s) need local time formatting.
+chrono = "0.4"
 
 [target."cfg(windows)".dependencies]
 # SetupAPI, only to read the friendlier device description that serialport omits.

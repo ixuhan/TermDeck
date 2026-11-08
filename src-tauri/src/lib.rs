@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod fsview;
 pub mod ports;
+pub mod serial;
 pub mod shellmenu;
 pub mod history;
 pub mod logging;
@@ -13,6 +14,7 @@ use tauri::Manager;
 
 pub struct AppState {
     pub pty: pty::PtyManager,
+    pub serial: serial::SerialManager,
     pub history: history::HistoryStore,
     pub paths: workspace::AppPaths,
 }
@@ -37,10 +39,24 @@ pub fn run() {
             let paths = workspace::AppPaths::new(dir);
             logging::init(paths.dir());
             logging::info(format!("app starting, data dir = {}", paths.dir().display()));
+
+            // The window is created hidden (`visible: false`), so automated runs
+            // never flash on screen. Normal runs show it here; WebView2 renders
+            // off-screen fine, which keeps the devtools protocol working.
+            if let Some(win) = app.get_webview_window("main") {
+                if std::env::var("TERMDECK_TEST_HIDDEN").is_ok() {
+                    let _ = win.set_position(tauri::PhysicalPosition::new(-4000, -4000));
+                    logging::info("test mode: window stays hidden".to_string());
+                } else {
+                    let _ = win.show();
+                    let _ = win.set_focus();
+                }
+            }
             let history = history::HistoryStore::open(&paths.db())?;
 
             app.manage(AppState {
                 pty: pty::PtyManager::new(),
+                serial: serial::SerialManager::new(),
                 history,
                 paths,
             });
@@ -68,6 +84,13 @@ pub fn run() {
             commands::install_kind,
             commands::list_serial_ports,
             commands::show_context_menu,
+            commands::serial_open,
+            commands::serial_pause,
+            commands::serial_resume,
+            commands::serial_status,
+            commands::serial_update,
+            commands::serial_write_bytes,
+            commands::serial_reveal_log,
             commands::scrollback_save,
             commands::scrollback_load,
             commands::scrollback_clear,

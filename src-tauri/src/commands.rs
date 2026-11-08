@@ -37,12 +37,23 @@ pub fn create_session(
         })
 }
 
+/// Serial session ids are prefixed so one command surface can serve both kinds
+/// of stream: `serial:<session-key>` versus a plain PTY uuid.
+const SERIAL_PREFIX: &str = "serial:";
+
+fn as_serial(id: &str) -> Option<&str> {
+    id.strip_prefix(SERIAL_PREFIX)
+}
+
 #[tauri::command]
 pub fn write_pty(
     app_state: State<'_, AppState>,
     session_id: String,
     data: String,
 ) -> Result<(), String> {
+    if let Some(key) = as_serial(&session_id) {
+        return app_state.serial.write(key, data.as_bytes());
+    }
     app_state
         .pty
         .write(&session_id, &data)
@@ -64,11 +75,18 @@ pub fn resize_pty(
 
 #[tauri::command]
 pub fn kill_session(app_state: State<'_, AppState>, session_id: String) -> Result<(), String> {
+    if let Some(key) = as_serial(&session_id) {
+        app_state.serial.close(key);
+        return Ok(());
+    }
     app_state.pty.kill(&session_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn session_alive(app_state: State<'_, AppState>, session_id: String) -> bool {
+    if let Some(key) = as_serial(&session_id) {
+        return app_state.serial.has(key);
+    }
     app_state.pty.has(&session_id)
 }
 
@@ -76,6 +94,9 @@ pub fn session_alive(app_state: State<'_, AppState>, session_id: String) -> bool
 /// spawn race), then flips the session to live streaming.
 #[tauri::command]
 pub fn pty_attach(app_state: State<'_, AppState>, session_id: String) -> String {
+    if let Some(key) = as_serial(&session_id) {
+        return app_state.serial.attach(key);
+    }
     app_state.pty.attach(&session_id)
 }
 
@@ -336,6 +357,101 @@ pub async fn show_context_menu(
             .map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())?
     }
+}
+
+// --------------------------------------------------------------- serial sessions
+
+fn serial_data_dir(app_state: &AppState) -> std::path::PathBuf {
+    app_state.paths.dir().to_path_buf()
+}
+
+#[tauri::command]
+pub fn serial_open(
+    app: tauri::AppHandle,
+    app_state: State<'_, AppState>,
+    session_key: String,
+    config: crate::serial::SerialConfig,
+    view: crate::serial::SerialView,
+    log: crate::serial::LogConfig,
+) -> Result<(), String> {
+    let dir = serial_data_dir(&app_state);
+    app_state
+        .serial
+        .open(app, session_key.clone(), config, view, log, &dir)
+        .map_err(|e| {
+            crate::logging::warn(format!("serial_open({session_key}) failed: {e}"));
+            e
+        })
+}
+
+#[tauri::command]
+pub fn serial_pause(app_state: State<'_, AppState>, session_key: String) -> Result<(), String> {
+    app_state.serial.pause(&session_key)
+}
+
+#[tauri::command]
+pub fn serial_resume(
+    app: tauri::AppHandle,
+    app_state: State<'_, AppState>,
+    session_key: String,
+) -> Result<(), String> {
+    let dir = serial_data_dir(&app_state);
+    app_state
+        .serial
+        .resume(app, &session_key, &dir)
+        .map_err(|e| {
+            crate::logging::warn(format!("serial_resume({session_key}) failed: {e}"));
+            e
+        })
+}
+
+#[tauri::command]
+pub fn serial_status(
+    app_state: State<'_, AppState>,
+    session_key: String,
+) -> crate::serial::SerialStatus {
+    app_state.serial.status(&session_key)
+}
+
+#[tauri::command]
+pub fn serial_update(
+    app_state: State<'_, AppState>,
+    session_key: String,
+    view: crate::serial::SerialView,
+    log: crate::serial::LogConfig,
+    config: Option<crate::serial::SerialConfig>,
+) -> Result<(), String> {
+    app_state.serial.update_settings(&session_key, view, log)?;
+    if let Some(cfg) = config {
+        app_state.serial.update_config(&session_key, cfg)?;
+    }
+    Ok(())
+}
+
+/// Sends raw bytes; hex input is parsed on the frontend and arrives as numbers.
+#[tauri::command]
+pub fn serial_write_bytes(
+    app_state: State<'_, AppState>,
+    session_key: String,
+    bytes: Vec<u8>,
+) -> Result<(), String> {
+    app_state.serial.write(&session_key, &bytes)
+}
+
+/// Opens the folder holding this session's log file.
+#[tauri::command]
+pub fn serial_reveal_log(app_state: State<'_, AppState>, session_key: String) -> Result<(), String> {
+    let status = app_state.serial.status(&session_key);
+    let Some(path) = status.log_path else {
+        return Err("该会话没有开启日志记录".into());
+    };
+    let dir = std::path::Path::new(&path)
+        .parent()
+        .ok_or_else(|| "无法定位日志目录".to_string())?;
+    if !dir.exists() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    crate::fsview::open_with_default(&dir.display().to_string())
 }
 
 #[tauri::command]

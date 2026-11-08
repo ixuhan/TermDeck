@@ -8,11 +8,14 @@ import type {
   HistoryItem,
   InstallKind,
   Preset,
+  SerialConfig,
+  SerialLogConfig,
   SerialPort,
+  SerialView,
   ShellProfile,
   UpdateInfo,
 } from "../types";
-import type { Ipc, PersistedWorkspace } from "./types";
+import type { Ipc, PersistedWorkspace, SerialStatus } from "./types";
 
 export function createTauriIpc(): Ipc {
   // Held between checkUpdate and installUpdate: the plugin hands out an
@@ -131,6 +134,23 @@ export function createTauriIpc(): Ipc {
     scrollbackClear: (sessionKey) => invoke("scrollback_clear", { sessionKey }),
 
     listSerialPorts: () => invoke<SerialPort[]>("list_serial_ports"),
+
+    serialOpen: (sessionKey, config, view, log) =>
+      invoke("serial_open", { sessionKey, config, view, log }),
+
+    serialPause: (sessionKey) => invoke("serial_pause", { sessionKey }),
+
+    serialResume: (sessionKey) => invoke("serial_resume", { sessionKey }),
+
+    serialStatus: (sessionKey) => invoke<SerialStatus>("serial_status", { sessionKey }),
+
+    serialUpdate: (sessionKey, view, log, config) =>
+      invoke("serial_update", { sessionKey, view, log, config }),
+
+    serialWriteBytes: (sessionKey, bytes) =>
+      invoke("serial_write_bytes", { sessionKey, bytes }),
+
+    serialRevealLog: (sessionKey) => invoke("serial_reveal_log", { sessionKey }),
 
     showContextMenu: (path, x, y) => invoke("show_context_menu", { path, x, y }),
 

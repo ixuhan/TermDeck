@@ -194,7 +194,13 @@ class MockShell {
 
 export function createMockIpc(): Ipc {
   const shells = new Map<string, MockShell>();
-  const dataCbs = new Set<DataCb>();
+  /** Fake open serial sessions for the browser preview. */
+const mockSerial = new Map<
+  string,
+  { open: boolean; paused: boolean; baud: number; logPath: string | null }
+>();
+
+const dataCbs = new Set<DataCb>();
   const exitCbs = new Set<ExitCb>();
   const history = new Map<string, HistoryItem[]>();
   const cwdOf = new Map<string, string>();
@@ -423,6 +429,58 @@ export function createMockIpc(): Ipc {
     async showContextMenu() {
       // Browser preview has no shell; the hook exists so the UI compiles and
       // the right-click does not fall through to the browser menu.
+    },
+
+    async serialOpen(sessionKey, config) {
+      mockSerial.set(sessionKey, {
+        open: true,
+        paused: false,
+        baud: config.baud,
+        logPath: null,
+      });
+    },
+
+    async serialPause(sessionKey) {
+      const st = mockSerial.get(sessionKey);
+      if (st) {
+        st.open = false;
+        st.paused = true;
+      }
+    },
+
+    async serialResume(sessionKey) {
+      const st = mockSerial.get(sessionKey);
+      if (st) {
+        st.open = true;
+        st.paused = false;
+      }
+    },
+
+    async serialStatus(sessionKey) {
+      const st = mockSerial.get(sessionKey);
+      return {
+        open: st?.open ?? false,
+        paused: st?.paused ?? false,
+        alive: st?.open ?? false,
+        logPath: st?.logPath ?? null,
+      };
+    },
+
+    async serialUpdate(sessionKey) {
+      const st = mockSerial.get(sessionKey);
+      if (st) st.logPath = null;
+    },
+
+    async serialWriteBytes(sessionKey, bytes) {
+      const st = mockSerial.get(sessionKey);
+      if (st?.paused) throw new Error("串口已关闭（暂停中）");
+      // Loopback so the browser preview can exercise the whole path.
+      const text = String.fromCharCode(...bytes) + "\r\n";
+      for (const cb of dataCbs) cb({ sessionId: `serial:${sessionKey}`, data: text });
+    },
+
+    async serialRevealLog() {
+      /* browser preview has no file system */
     },
 
     async listSerialPorts() {
