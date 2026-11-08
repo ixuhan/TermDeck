@@ -158,7 +158,7 @@ export function LeftRail() {
                         : "E"}
                     {s.serial.config.stopBits}
                     {" · "}
-                    {s.serial.paused ? "已暂停（端口已释放）" : s.alive ? "已连接" : "未打开"}
+                    {s.alive ? "已连接" : s.serial.paused ? "已暂停（端口已释放）" : "未连接"}
                   </span>
                 ) : (
                   <span className="session-meta">
@@ -177,13 +177,16 @@ export function LeftRail() {
                 {s.kind === "serial" && s.serial ? (
                   <span className="serial-actions">
                     <button
-                      title={s.serial.paused ? "继续（重新打开串口）" : "暂停（释放串口给其他程序）"}
+                      title={
+                        s.alive ? "暂停（释放串口给其他程序）" : "连接串口"
+                      }
                       onClick={(e) => {
                         e.stopPropagation();
-                        void (s.serial!.paused ? resumeSerial(s.key) : pauseSerial(s.key));
+                        // A session starts disconnected; the first click connects.
+                        void (s.alive ? pauseSerial(s.key) : resumeSerial(s.key));
                       }}
                     >
-                      {s.serial.paused ? "▶" : "⏸"}
+                      {s.alive ? "⏸" : "▶"}
                     </button>
                     {s.serial.log.enabled && (
                       <button

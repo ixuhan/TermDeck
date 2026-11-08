@@ -393,6 +393,11 @@ impl SerialManager {
             reader,
             stop,
         });
+        // Logged so a "port busy" later can be traced to who opened it when.
+        crate::logging::info(format!(
+            "serial open {} @ {} (session {id})",
+            config.port, config.baud
+        ));
 
         Ok(())
     }

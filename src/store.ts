@@ -193,6 +193,28 @@ export const useStore = create<Store>((set, get) => {
     };
   };
 
+  /**
+   * Points the directory panel at the session's log folder.
+   *
+   * Called after the port opens or its log settings change: the folder only
+   * exists once a template is resolved, and placeholders like %Y%M%D make it
+   * change over time, so it cannot be computed on the frontend.
+   */
+  const followLogDir = async (key: string) => {
+    try {
+      const status = await ipc.serialStatus(key);
+      if (!status.logPath) return;
+      const dir = status.logPath.replace(/[\\/][^\\/]+$/, "");
+      if (!dir) return;
+      const state = get();
+      state.setDirMode(key, "fixed");
+      state.setDirFixedPath(key, dir);
+      state.setDirVisible(key, true);
+    } catch {
+      /* log folder unknown; leave the panel as is */
+    }
+  };
+
   return {
     ready: false,
     sessions: [],
@@ -298,10 +320,15 @@ export const useStore = create<Store>((set, get) => {
         });
 
         // Restore only what the user is looking at; the rest boot on demand.
+        // Serial sessions are never auto-connected on boot: opening a port pulls
+        // DTR and resets most USB-serial boards, so it has to be a user action.
         if (settings.lazySpawn) {
-          await get().ensureSpawned(activeKey);
+          const active = sessions.find((x) => x.key === activeKey);
+          if (active && active.kind !== "serial") await get().ensureSpawned(activeKey);
         } else {
-          for (const s of sessions) await get().ensureSpawned(s.key);
+          for (const s of sessions) {
+            if (s.kind !== "serial") await get().ensureSpawned(s.key);
+          }
         }
         return;
       }
@@ -396,25 +423,11 @@ export const useStore = create<Store>((set, get) => {
         dir: { visible: false, mode: "fixed", fixedPath: null, currentPath: "" },
       };
       set((s) => ({ sessions: [...s.sessions, draft], activeKey: draft.key }));
-      // Register before opening: the log folder must be reachable even when the
-      // port fails to open or is paused later.
+      // Register only: opening a serial port resets most USB-serial adapters, so
+      // it must be an explicit action, never a side effect of creating a tab.
       await ipc
         .serialRegister(draft.key, config, draft.serial!.view, draft.serial!.log)
         .catch(() => undefined);
-      try {
-        const spawned = await spawn(draft);
-        set((s) => ({
-          sessions: s.sessions.map((x) => (x.key === draft.key ? spawned : x)),
-        }));
-      } catch (err) {
-        // Keep the session so the user can fix the settings and retry.
-        set({
-          lastError: `打开串口失败：${String(err)}`,
-          sessions: get().sessions.map((x) =>
-            x.key === draft.key ? { ...x, spawned: false, alive: false } : x,
-          ),
-        });
-      }
       schedule();
     },
 
@@ -443,6 +456,7 @@ export const useStore = create<Store>((set, get) => {
               : x,
           ),
         }));
+        await followLogDir(key);
       } catch (e) {
         set({ lastError: `重新打开串口失败：${String(e)}` });
       }
@@ -481,6 +495,7 @@ export const useStore = create<Store>((set, get) => {
               : x,
           ),
         }));
+        await followLogDir(key);
       } catch (e) {
         set({ lastError: `更新串口配置失败：${String(e)}` });
       }
@@ -489,7 +504,13 @@ export const useStore = create<Store>((set, get) => {
 
     async ensureSpawned(key) {
       const session = get().sessions.find((x) => x.key === key);
-      if (!session || session.spawned) return;
+      if (!session) return;
+      if (session.kind === "serial") {
+        // Connecting is the serial equivalent of spawning a shell.
+        if (!session.alive) await get().resumeSerial(key);
+        return;
+      }
+      if (session.spawned) return;
       try {
         const spawned = await spawn(session);
         set((s) => ({

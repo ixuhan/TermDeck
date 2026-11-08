@@ -39,6 +39,13 @@ try {
   ok("从串口面板新建会话", after === before + 1, `${before} -> ${after}`);
 
   const item = page.locator(".session-item").last();
+  const disconnected = (await item.locator(".session-meta").innerText()).trim();
+  ok("创建后保持未连接", disconnected.includes("未连接"), disconnected);
+  // Sessions now start disconnected; connecting is an explicit click.
+  await item.hover();
+  await item.locator(".serial-actions button").nth(0).click();
+  await page.waitForTimeout(2200);
+
   const portName = (await item.locator(".serial-port-name").innerText()).trim();
   const baud = (await item.locator(".serial-baud-pill").innerText()).trim();
   out.push(`INFO header: ${portName} / ${baud}`);

@@ -287,15 +287,19 @@ export function TerminalView({ session, active }: { session: Session; active: bo
         <div className="lazy-pane">
           <span className="lazy-title">{session.title}</span>
           <span className="lazy-hint">
-            {session.cwd || session.profile.executable}
+            {session.kind === "serial"
+              ? `${session.serial?.config.port ?? ""} 尚未连接`
+              : session.cwd || session.profile.executable}
             <br />
-            该会话尚未启动，点击下方按钮启动 Shell 进程
+            {session.kind === "serial"
+              ? "连接会打开串口，部分开发板会因此复位"
+              : "该会话尚未启动，点击下方按钮启动 Shell 进程"}
           </span>
           <button
             className="mini-btn"
             onClick={() => void useStore.getState().ensureSpawned(session.key)}
           >
-            启动会话
+            {session.kind === "serial" ? "连接串口" : "启动会话"}
           </button>
         </div>
       )}

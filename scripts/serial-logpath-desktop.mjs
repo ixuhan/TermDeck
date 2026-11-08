@@ -82,6 +82,11 @@ try {
   await wait(2500);
 
   const item = page.locator(".session-item").last();
+  // Sessions now start disconnected; connecting is an explicit click.
+  await item.hover();
+  await item.locator(".serial-actions button").nth(0).click();
+  await page.waitForTimeout(2200);
+
   const key = await item.getAttribute("data-key");
   ok("会话已创建", !!key, String(key));
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { ipc } from "../ipc";
 import { useStore } from "../store";
 import type { DirListing, Session } from "../types";
@@ -50,6 +51,7 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
   const setDirVisible = useStore((s) => s.setDirVisible);
   const setDirMode = useStore((s) => s.setDirMode);
   const setDirPath = useStore((s) => s.setDirPath);
+  const setDirFixedPath = useStore((s) => s.setDirFixedPath);
   const showToast = useStore((s) => s.showToast);
   const height = useStore((s) => s.layout.dirHeight);
 
@@ -150,6 +152,44 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
           </button>
         </div>
         <div className="dir-actions">
+          {session.dir.mode === "fixed" && (
+            <button
+              title="选择固定目录"
+              onClick={() => {
+                void (async () => {
+                  try {
+                    const picked = await openDialog({
+                      directory: true,
+                      multiple: false,
+                      title: "选择要固定的目录",
+                    });
+                    if (typeof picked !== "string") return;
+                    setDirFixedPath(session.key, picked);
+                    setDirPath(session.key, picked);
+                  } catch (e) {
+                    showToast(`选择目录失败：${String(e)}`);
+                  }
+                })();
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden>
+                <path
+                  d="M1.8 4.2h4l1.3 1.6h7.1v6.6H1.8z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M8 8v4M6 10h4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          )}
           <button title="刷新" onClick={() => void load(target, true)}>
             <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden>
               <path

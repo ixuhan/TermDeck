@@ -475,9 +475,12 @@ const dataCbs = new Set<DataCb>();
       };
     },
 
-    async serialUpdate(sessionKey) {
+    async serialUpdate(sessionKey, _view, log) {
       const st = mockSerial.get(sessionKey);
-      if (st) st.logPath = null;
+      if (st) {
+        // Mirror the backend: a resolved path exists only while logging is on.
+        st.logPath = log?.enabled ? `F:////mock////logs////COM3////%Port-demo.log` : null;
+      }
     },
 
     async serialWriteBytes(sessionKey, bytes) {

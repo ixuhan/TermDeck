@@ -19,6 +19,7 @@ const BROWSER = [
   "quickpanel-test.mjs",
   "quickfix-test.mjs",
   "serialsession-test.mjs",
+  "serial-defaults-test.mjs",
 ];
 
 const DESKTOP = [
@@ -27,6 +28,8 @@ const DESKTOP = [
   "ctrlr-desktop.mjs",
   "scrollback-test.mjs",
   "serial-real-desktop.mjs",
+  "serial-logpath-desktop.mjs",
+  "serial-loopback-desktop.mjs",
 ];
 
 const mode = process.argv[2] ?? "all";

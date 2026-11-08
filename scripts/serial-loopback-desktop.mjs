@@ -92,6 +92,11 @@ try {
   await wait(2500);
 
   const item = page.locator(".session-item").last();
+  // Sessions now start disconnected; connecting is an explicit click.
+  await item.hover();
+  await item.locator(".serial-actions button").nth(0).click();
+  await page.waitForTimeout(2200);
+
   const meta = (await item.locator(".session-meta").innerText()).trim();
   out.push(`INFO session meta: ${meta}`);
   ok("应用已连上 COM2", meta.includes("已连接"), meta);
@@ -104,11 +109,25 @@ try {
   // ---- receive: peer -> app ------------------------------------------------
   const incoming = `PING-FROM-PEER-${Date.now()}`;
   peer("write", PEER_PORT, incoming);
-  await wait(1500);
 
+  // Read the backend backlog rather than the DOM: a hidden window throttles
+  // xterm's renderer, so the screen may lag behind what the app actually
+  // received. `pty_attach` drains exactly what the reader pushed.
+  let buffered = "";
+  for (let i = 0; i < 12; i++) {
+    await wait(400);
+    buffered = await page.evaluate(
+      (k) => window.__TAURI_INTERNALS__.invoke("pty_attach", { sessionId: `serial:${k}` }),
+      key,
+    );
+    if (buffered.includes(incoming)) break;
+  }
+  out.push(`INFO backend backlog: ${JSON.stringify((buffered || "").slice(0, 160))}`);
+  ok("应用收到对端发来的数据", (buffered || "").includes(incoming), incoming);
+
+  // The screen is a secondary check; the terminal may still be mid-render.
   const screen = await page.locator(".term-pane.is-active .xterm-rows").innerText().catch(() => "");
-  out.push(`INFO screen tail: ${JSON.stringify(screen.slice(-160))}`);
-  ok("终端显示对端发来的数据", screen.includes(incoming), incoming);
+  out.push(`INFO screen tail: ${JSON.stringify(screen.slice(-120))}`);
 
   // ---- send: app -> peer ----------------------------------------------------
   const outgoing = `PONG-FROM-APP-${Date.now()}`;
