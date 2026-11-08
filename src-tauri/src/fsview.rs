@@ -115,13 +115,29 @@ pub fn open_with_default(path: &str) -> Result<(), String> {
     }
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", path])
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-            .map_err(|e| format!("打开失败：{e}"))?;
+        // ShellExecute, not `cmd /C start`: start treats a leading `/` inside the
+        // path as one of its own switches, which is what produced
+        // "指定的设备名无效" for paths like data\logs/COM2.
+        use windows::core::PCWSTR;
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let verb: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+        let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+        let result = unsafe {
+            ShellExecuteW(
+                None,
+                PCWSTR(verb.as_ptr()),
+                PCWSTR(wide.as_ptr()),
+                PCWSTR::null(),
+                PCWSTR::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+        // ShellExecute returns a value <= 32 on failure.
+        if result.0 as isize <= 32 {
+            return Err(format!("打开失败（错误码 {}）：{path}", result.0 as isize));
+        }
     }
     #[cfg(not(windows))]
     {

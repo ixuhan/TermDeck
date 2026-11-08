@@ -586,7 +586,14 @@ pub fn resolve_log_path(template: &str, cfg: &SerialConfig, data_dir: &Path) -> 
     if trimmed.is_empty() {
         return None;
     }
-    let rendered = render_template(trimmed, cfg, &chrono::Local::now());
+    // Templates are written with forward slashes; Windows paths that mix `\` and
+    // `/` confuse `start` and Explorer, which read `/x` as a switch.
+    let normalized = if cfg!(windows) {
+        trimmed.replace('/', "\\")
+    } else {
+        trimmed.to_string()
+    };
+    let rendered = render_template(&normalized, cfg, &chrono::Local::now());
     let path = Path::new(&rendered);
     Some(if path.is_absolute() {
         path.to_path_buf()

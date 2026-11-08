@@ -121,6 +121,12 @@ try {
     String(status?.logPath),
   );
   ok("路径含端口目录", !!status?.logPath && status.logPath.includes(PORT), String(status?.logPath));
+  // Mixed separators made the launcher fail with "指定的设备名无效".
+  ok(
+    "路径分隔符已统一",
+    !!status?.logPath && !status.logPath.substring(2).includes("/"),
+    String(status?.logPath),
+  );
 
   // Revealing must work while closed: the backend creates the folder itself.
   // Verified through the status path's parent instead of calling reveal, so no
@@ -155,6 +161,18 @@ try {
     !!rel?.logPath && rel.logPath.startsWith(DATA),
     String(rel?.logPath),
   );
+  // The action that used to fail with "指定的设备名无效": revealing the folder
+  // while the port is closed. Explorer will open once; that is the point.
+  const reveal = await page.evaluate(async (k) => {
+    try {
+      await window.__TAURI_INTERNALS__.invoke("serial_reveal_log", { sessionKey: k });
+      return "ok";
+    } catch (e) {
+      return "ERR " + String(e);
+    }
+  }, key);
+  out.push(`INFO reveal: ${reveal}`);
+  ok("未连接时也能打开日志目录", reveal === "ok", reveal);
 } catch (err) {
   out.push(`THROW ${err && err.message ? err.message : String(err)}`);
 } finally {
