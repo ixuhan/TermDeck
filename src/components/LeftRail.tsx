@@ -99,6 +99,12 @@ export function LeftRail() {
               }}
               onClick={() => activate(s.key)}
               onDoubleClick={() => {
+                // Serial sessions connect on double-click; shells rename on
+                // double-click (as before).
+                if (s.kind === "serial") {
+                  void (s.alive ? pauseSerial(s.key) : resumeSerial(s.key));
+                  return;
+                }
                 setEditingKey(s.key);
                 setDraft(s.title);
               }}

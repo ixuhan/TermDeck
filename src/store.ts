@@ -562,7 +562,11 @@ export const useStore = create<Store>((set, get) => {
         activeKey: key,
         mode: state.manualLock ? "passthrough" : "input",
       });
-      void get().ensureSpawned(key);
+      const target = get().sessions.find((x) => x.key === key);
+      // Serial sessions must not auto-connect on activation: the user asked that
+      // merely clicking / switching to one leaves the port alone, and only an
+      // explicit double-click or the connect button opens it.
+      if (target?.kind !== "serial") void get().ensureSpawned(key);
       schedule();
     },
 

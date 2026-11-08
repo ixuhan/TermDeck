@@ -27,6 +27,7 @@ const BROWSER = [
   "quickfix-test.mjs",
   "serialsession-test.mjs",
   "serial-defaults-test.mjs",
+  "serial-click-noautoconnect-test.mjs",
   "timestamp-test.mjs",
 ];
 
