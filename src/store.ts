@@ -95,7 +95,9 @@ interface Store {
   renameSession: (key: string, title: string) => void;
   reorderSessions: (from: number, to: number) => void;
   setCwd: (key: string, cwd: string) => void;
-  markExit: (key: string, code: number) => void;
+  /** Marks the session whose PTY id matches as exited. Serial ids carry a
+   *  `serial:` prefix, so a shell exit never touches a serial session. */
+  markExit: (ptyId: string, code: number) => void;
   restartSession: (key: string) => Promise<void>;
   ensureSpawned: (key: string) => Promise<void>;
 
@@ -238,6 +240,12 @@ export const useStore = create<Store>((set, get) => {
     async boot() {
       if (booted) return;
       booted = true;
+
+      // A shell that exits (user typed `exit`, the process crashed, the window
+      // was killed) must flip the session to "已退出" instead of leaving a
+      // stale green dot and a dead PTY id behind. Without this, clicking the
+      // session renders an empty terminal with no way to restart it.
+      void ipc.onPtyExit(({ sessionId, code }) => get().markExit(sessionId, code));
 
       const [saved, loadedPresets, loadedSettings, dir] = await Promise.all([
         ipc.workspaceLoad(),
@@ -595,11 +603,19 @@ export const useStore = create<Store>((set, get) => {
       schedule();
     },
 
-    markExit(key, code) {
+    markExit(ptyId, code) {
       set((s) => ({
-        sessions: s.sessions.map((x) =>
-          x.key === key ? { ...x, alive: false, exitCode: code, ptyId: null } : x,
-        ),
+        sessions: s.sessions.map((x) => {
+          if (x.ptyId !== ptyId) return x;
+          // A serial read error reports through the same event; reflect it on
+          // the serial session rather than pretending the shell exited.
+          if (x.kind === "serial" && x.serial) {
+            return { ...x, alive: false, serial: { ...x.serial, paused: true } };
+          }
+          // Drop the runtime so ensureSpawned can respawn it on the next click;
+          // leaving a stale ptyId would render an empty terminal for a dead shell.
+          return { ...x, alive: false, exitCode: code, ptyId: null, spawned: false };
+        }),
       }));
     },
 

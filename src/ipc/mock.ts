@@ -45,6 +45,7 @@ class MockShell {
     readonly id: string,
     profile: ShellProfile,
     private emit: (data: string) => void,
+    private onExit: () => void,
   ) {
     this.cwd = profile.cwd || "C:\\Projects\\TermDeck";
     const shellTag = profile.name || "shell";
@@ -183,6 +184,9 @@ class MockShell {
         return;
       case "exit":
         this.emit("\r\n\x1b[90m[session ended]\x1b[0m\r\n");
+        // Mirror the real backend: the process ends and `pty:exit` fires so the
+        // session flips to "已退出" instead of a stale green dot.
+        this.onExit();
         return;
       default:
         this.emit(`'${head}' 不是可识别的命令（mock 模式，输入 help 查看支持列表）\r\n`);
@@ -245,7 +249,10 @@ const dataCbs = new Set<DataCb>();
 
     async createSession(profile: ShellProfile) {
       const id = `sess_mock_${++seq}`;
-      const shell = new MockShell(id, profile, emitData(id));
+      const shell = new MockShell(id, profile, emitData(id), () => {
+        shells.delete(id);
+        for (const cb of exitCbs) cb({ sessionId: id, code: 0 });
+      });
       shells.set(id, shell);
       cwdOf.set(id, profile.cwd || "C:\\Projects\\TermDeck");
       ensureSeed(id);

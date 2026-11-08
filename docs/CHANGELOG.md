@@ -1,5 +1,19 @@
 # 变更记录
 
+### 修复：Shell 退出后点选会话显示空白
+
+- 根因：`pty:exit` 事件从初始版本就定义了但**从未被订阅**，`markExit` 也从未被调用
+  （dead code）。Shell 退出（`exit` / 崩溃 / 被杀）后前端 `alive`、`ptyId`、`spawned`
+  永远冻结为「运行中」，列表仍是绿点。再点选该会话时 `ensureSpawned` 见 `spawned=true`
+  直接跳过，渲染一个指向已死进程的空终端 —— 即「选择 shell 之后无显示」
+- 修法：`boot()` 里订阅 `onPtyExit`，按 ptyId 反查会话并调用 `markExit`；
+  `markExit` 现在把 shell 会话置为 `alive:false / ptyId:null / spawned:false`，
+  串口会话（`serial:` 前缀）单独走 `serial.paused` 分支，互不误伤
+- 效果：退出后列表立刻变「已退出 · code N」，点选显示「启动会话」按钮而非空白；
+  再点一次自动重新 spawn
+- mock 的 `exit` 命令同步触发退出回调，使浏览器预览也能端到端验证
+- 新增 4 条断言（#14：退出标记、空屏显启动按钮、再点重 spawn）
+
 ### 会话项统一高度
 
 - 之前终端项 66px（title / meta / cwd 三行）、串口项静止 52px、hover 时 73px

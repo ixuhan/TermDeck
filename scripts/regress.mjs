@@ -165,6 +165,44 @@ ok("#13c ArrowDown steps newer", down1 === "echo up-two", down1);
 ok("#13d ArrowDown restores draft", down2 === "", `[${down2}]`);
 await page.screenshot({ path: "shots/r13-history-nav.png" });
 
+// ---- #14 shell exit flips the session to "exited" --------------------------
+// A shell that exits must not leave a stale green dot + dead pty id behind:
+// that was the "select shell -> blank terminal" bug. `exit` should mark the
+// session exited, and clicking it again should respawn a fresh shell.
+{
+  const snap = () =>
+    page.evaluate(() => {
+      const s = window.__tdStore.getState();
+      const a = s.sessions.find((x) => x.key === s.activeKey);
+      return a ? { alive: a.alive, spawned: a.spawned, ptyId: a.ptyId, exitCode: a.exitCode } : null;
+    });
+
+  const before = await snap();
+  ok("#14a active shell is running", before?.alive === true && !!before?.ptyId, JSON.stringify(before));
+
+  await input.click();
+  await input.type("exit", { delay: 20 });
+  await page.keyboard.press("Enter");
+  await wait(900);
+  const afterExit = await snap();
+  ok(
+    "#14b exit marks session exited",
+    afterExit?.alive === false && afterExit?.ptyId === null && afterExit?.exitCode === 0,
+    JSON.stringify(afterExit),
+  );
+
+  // The pane must show the lazy "restart" affordance, not a blank terminal.
+  const hasLazy = await page.locator(".term-pane.is-active .lazy-pane").count();
+  ok("#14c exited pane shows restart button", hasLazy === 1, `lazy=${hasLazy}`);
+
+  // Clicking the same session again respawns it.
+  await page.locator(".session-item.is-active").click();
+  await wait(1200);
+  const respawned = await snap();
+  ok("#14d re-click respawns the shell", respawned?.alive === true && !!respawned?.ptyId, JSON.stringify(respawned));
+  await page.screenshot({ path: "shots/r14-shell-exit.png" });
+}
+
 const fails = logs.filter((l) => l.startsWith("FAIL") || l.startsWith("[pageerror]"));
 console.log(logs.join("\n"));
 console.log(`\n==== ${logs.filter((l) => l.startsWith("PASS")).length} passed, ${fails.length} failed ====`);
