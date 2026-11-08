@@ -48,6 +48,10 @@ try {
   out.push(`INFO meta after connect: ${connected}`);
   ok("点▶后连接成功", connected.includes("已连接"), connected);
 
+  // The pane must switch from the placeholder to a real terminal surface.
+  ok("连接后显示终端", (await page.locator(".term-pane.is-active .term-surface").count()) === 1);
+  ok("连接后占位层消失", (await page.locator(".term-pane.is-active .lazy-pane").count()) === 0);
+
   // ---- logging -> directory panel follows ----------------------------------
   ok("连接前无目录面板", (await page.locator(".dir-panel").count()) === 0);
 

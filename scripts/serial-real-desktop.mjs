@@ -81,11 +81,23 @@ try {
   await wait(2500);
 
   const item = page.locator(".session-item").last();
+  // Sessions start disconnected; connect explicitly.
+  await item.hover();
+  await item.locator(".serial-actions button").nth(0).click();
+  await wait(2500);
   const name = (await item.locator(".serial-port-name").innerText()).trim();
   const meta = (await item.locator(".session-meta").innerText()).trim();
   out.push(`INFO session: ${name} / ${meta}`);
   ok("会话已创建", name === PORT, name);
   ok("真实端口打开成功", meta.includes("已连接"), meta);
+  ok(
+    "连接后终端已渲染",
+    (await page.locator(".term-pane.is-active .term-surface").count()) === 1,
+  );
+  ok(
+    "连接后占位层消失",
+    (await page.locator(".term-pane.is-active .lazy-pane").count()) === 0,
+  );
 
   // Status must reflect the driver, not just local state.
   const status = await page.evaluate((key) =>

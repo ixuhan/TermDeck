@@ -452,7 +452,15 @@ export const useStore = create<Store>((set, get) => {
         set((s) => ({
           sessions: s.sessions.map((x) =>
             x.key === key && x.serial
-              ? { ...x, alive: true, spawned: true, serial: { ...x.serial, paused: false } }
+              ? {
+                  ...x,
+                  alive: true,
+                  spawned: true,
+                  // The terminal renders on ptyId; without it the pane keeps
+                  // showing "not connected" even though the port is open.
+                  ptyId: x.ptyId ?? `serial:${key}`,
+                  serial: { ...x.serial, paused: false },
+                }
               : x,
           ),
         }));
