@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const clock = () =>
+  new Date().toLocaleTimeString("zh-CN", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { ipc } from "../ipc";
 import { useStore } from "../store";
@@ -96,12 +104,14 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
   const height = useStore((s) => s.layout.dirHeight);
   const sortBy = useStore((s) => s.settings.dirSortBy);
   const sortAsc = useStore((s) => s.settings.dirSortAsc);
+  const autoRefresh = useStore((s) => s.settings.dirAutoRefresh);
   const setSettings = useStore((s) => s.setSettings);
 
   const [listing, setListing] = useState<DirListing | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [lastAt, setLastAt] = useState<string | null>(null);
 
   const seqRef = useRef(0);
   const loadedRef = useRef("");
@@ -127,6 +137,7 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
         const res = await ipc.readDirectory(path);
         if (seqRef.current !== seq) return;
         setListing(res);
+        setLastAt(clock());
         // Backend resolved "." or walked up from a vanished directory; keep the
         // stored path in sync so the breadcrumb and restore are accurate.
         if (res.path !== path) setDirPath(session.key, res.path);
@@ -147,6 +158,18 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
     // "." lets the backend resolve the process CWD when no path is known yet.
     void load(target || ".");
   }, [target, session.dir.visible, active, load]);
+
+  // Opt-in 1 Hz polling, matching the serial port panel. Only the visible,
+  // active panel polls; `force` bypasses the path de-dup so disk changes show
+  // up. Silent: an existing listing is kept on screen instead of flashing
+  // "读取中…" every second.
+  useEffect(() => {
+    if (!autoRefresh || !session.dir.visible || !active) return;
+    const id = window.setInterval(() => {
+      void load(target || ".", true);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [autoRefresh, session.dir.visible, active, target, load]);
 
   // Background / collapsed panels keep nothing rendered and nothing cached.
   useEffect(() => {
@@ -319,8 +342,31 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
         >
           {sortAsc ? "↑" : "↓"}
         </button>
+        <div className="dir-mode" role="group" aria-label="刷新方式">
+          <button
+            className={!autoRefresh ? "is-on" : ""}
+            title="手动刷新，不轮询"
+            onClick={() => setSettings({ dirAutoRefresh: false })}
+          >
+            手动
+          </button>
+          <button
+            className={autoRefresh ? "is-on" : ""}
+            title="每秒重新读取一次目录"
+            onClick={() => setSettings({ dirAutoRefresh: true })}
+          >
+            1s
+          </button>
+        </div>
         <span className="dir-count">{listing?.entries.length ?? 0} 项</span>
       </div>
+
+      {autoRefresh && (
+        <div className="dir-live">
+          <span className="dir-pulse" />
+          {lastAt ? `每秒刷新 · ${lastAt}` : "每秒刷新 · 等待首次结果"}
+        </div>
+      )}
 
       <div className="dir-list">
         {listing?.parent && (

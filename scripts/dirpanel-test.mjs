@@ -179,6 +179,33 @@ await page.waitForSelector(".dir-sort-select", { timeout: 20000 });
 await wait(900);
 ok("#9j 排序方式持久化", (await page.locator(".dir-sort-select").inputValue()) === "type");
 
+// ---- 10. 自动刷新 ----------------------------------------------------------
+const refreshMode = page.locator(".dir-sortbar .dir-mode");
+ok("#10a 刷新方式控件存在", (await refreshMode.count()) === 1);
+const manualBtn = refreshMode.locator("button", { hasText: "手动" });
+const autoBtn = refreshMode.locator("button", { hasText: "1s" });
+ok("#10b 默认手动", (await manualBtn.getAttribute("class"))?.includes("is-on") === true);
+ok("#10c 手动时不显示状态行", (await page.locator(".dir-live").count()) === 0);
+
+await autoBtn.click();
+await wait(500);
+const live1 = await page.locator(".dir-live").innerText();
+ok("#10d 1s 模式显示状态行", /每秒刷新/.test(live1), live1);
+await wait(2400);
+const live2 = await page.locator(".dir-live").innerText();
+ok("#10e 刷新时间随轮询推进", live1 !== live2, `${live1} -> ${live2}`);
+
+// The choice is a persisted setting, just like the sort key.
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector(".dir-sortbar .dir-mode", { timeout: 20000 });
+await wait(1000);
+ok("#10f 1s 模式持久化", (await page.locator(".dir-sortbar .dir-mode button", { hasText: "1s" }).getAttribute("class"))?.includes("is-on") === true);
+ok("#10g 重启后状态行仍在", (await page.locator(".dir-live").count()) === 1);
+
+await page.locator(".dir-sortbar .dir-mode button", { hasText: "手动" }).click();
+await wait(400);
+ok("#10h 切回手动后状态行消失", (await page.locator(".dir-live").count()) === 0);
+
 // Back to follow mode for the screenshot.
 await page.locator(".dir-mode button", { hasText: "跟随" }).click();
 await wait(700);

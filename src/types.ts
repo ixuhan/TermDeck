@@ -216,6 +216,8 @@ export interface Settings {
   dirSortBy: DirSortKey;
   /** Ascending (true) or descending (false) within each group. */
   dirSortAsc: boolean;
+  /** Re-read the directory once a second. Off by default: no watcher, no idle cost. */
+  dirAutoRefresh: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -235,4 +237,5 @@ export const DEFAULT_SETTINGS: Settings = {
   lineTimestamps: false,
   dirSortBy: "name",
   dirSortAsc: true,
+  dirAutoRefresh: false,
 };
