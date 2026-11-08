@@ -35,6 +35,17 @@ jobs:
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      - name: Disable updater artifacts if signing key is absent
+        # 仓库没配 TAURI_SIGNING_PRIVATE_KEY 时，tauri build 因无法给
+        # latest.json/.sig 签名而失败。这里临时关掉 updater 产物，让 CI 仍能
+        # 出安装包 + 便携 zip。一旦补上密钥，本步自动跳过，恢复带签名发布。
+        if: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY == '' }}
+        shell: pwsh
+        run: |
+          $p = "src-tauri/tauri.conf.json"
+          (Get-Content $p -Raw) -replace '"createUpdaterArtifacts":\s*true', '"createUpdaterArtifacts": false' | Set-Content $p -Encoding utf8 -NoNewline
+          Write-Host "createUpdaterArtifacts -> false (no signing key; updater disabled for this build)"
+
       - name: Build and publish
         uses: tauri-apps/tauri-action@v0
         env:
