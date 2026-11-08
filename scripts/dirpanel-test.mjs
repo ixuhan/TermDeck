@@ -117,6 +117,68 @@ const restored = await page.evaluate(() => {
 ok("#8 固定路径冷启动还原", lockedAfter === lockedBefore && lockedAfter.endsWith("src"), `${lockedBefore} -> ${lockedAfter}`);
 ok("#8b 模式与显隐还原", restored.mode === "fixed" && restored.visible === true, JSON.stringify(restored));
 
+// ---- 9. 排序方式 -----------------------------------------------------------
+// Assertions are relative to whatever directory the panel currently shows, so
+// they hold for both the mock VFS and the real backend.
+const entries = async () =>
+  page.locator(".dir-row:not(.is-up)").evaluateAll((rows) =>
+    rows.map((r) => ({
+      name: r.querySelector(".dir-name")?.textContent?.trim() ?? "",
+      isDir: !!r.querySelector(".dir-icon.is-dir"),
+      meta: r.querySelector(".dir-size")?.textContent?.trim() ?? "",
+    })),
+  );
+const fileNames = async () => (await entries()).filter((e) => !e.isDir).map((e) => e.name);
+const ext = (n) => {
+  const i = n.lastIndexOf(".");
+  return i > 0 ? n.slice(i).toLowerCase() : "";
+};
+const parseSize = (t) => {
+  const m = /^([\d.]+)\s*(B|KB|MB)$/.exec(t);
+  if (!m) return 0;
+  const n = Number(m[1]);
+  return m[2] === "MB" ? n * 1048576 : m[2] === "KB" ? n * 1024 : n;
+};
+
+const select = page.locator(".dir-sort-select");
+ok("#9a 排序控件存在", (await select.count()) === 1);
+ok("#9b 默认按名称升序", (await select.inputValue()) === "name" && (await page.locator(".dir-sort-dir").innerText()) === "↑");
+const byName = await fileNames();
+const nameSorted = [...byName].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+ok("#9c 名称升序", byName.join(",") === nameSorted.join(","), byName.join(","));
+
+await select.selectOption("mtime");
+await wait(500);
+const byTime = await fileNames();
+ok("#9d 按修改时间改变顺序", byTime.length > 1 && byTime.join(",") !== byName.join(","), byTime.join(","));
+const timeCells = (await entries()).filter((e) => !e.isDir).map((e) => e.meta);
+ok("#9e 时间列显示修改时间", timeCells.every((t) => /^\d{2}-\d{2} \d{2}:\d{2}$/.test(t)), timeCells.join("|"));
+
+await page.locator(".dir-sort-dir").click();
+await wait(500);
+const timeDesc = await fileNames();
+ok("#9f 降序反转", timeDesc.join(",") === [...byTime].reverse().join(","), timeDesc.join(","));
+const foldersFirst = await entries();
+ok("#9g 文件夹始终在前", foldersFirst.findIndex((e) => !e.isDir) > foldersFirst.filter((e) => e.isDir).length - 1);
+
+await page.locator(".dir-sort-dir").click(); // back to ascending
+await select.selectOption("size");
+await wait(500);
+const sizes = (await entries()).filter((e) => !e.isDir).map((e) => parseSize(e.meta));
+ok("#9h 按大小升序", sizes.every((v, i) => i === 0 || sizes[i - 1] <= v), sizes.join(","));
+
+await select.selectOption("type");
+await wait(500);
+const byType = await fileNames();
+const exts = byType.map(ext);
+ok("#9i 按类型分组", exts.every((v, i) => i === 0 || exts[i - 1] <= v), exts.join(","));
+
+// Sorting choice is a persisted setting.
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector(".dir-sort-select", { timeout: 20000 });
+await wait(900);
+ok("#9j 排序方式持久化", (await page.locator(".dir-sort-select").inputValue()) === "type");
+
 // Back to follow mode for the screenshot.
 await page.locator(".dir-mode button", { hasText: "跟随" }).click();
 await wait(700);

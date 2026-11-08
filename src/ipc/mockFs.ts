@@ -90,11 +90,15 @@ export function mockListing(rawPath: string): DirListing {
   const sep = key.includes(BS) ? BS : "/";
   const base = key.endsWith(sep) ? key : key + sep;
 
+  // Deterministic times: the first node is newest, so "by mtime" deliberately
+  // differs from "by name" and the sort controls can be asserted in tests.
+  const baseTime = Date.UTC(2026, 10, 8, 10, 0, 0);
   const entries = nodes
-    .map((n) => ({
+    .map((n, i) => ({
       name: n.name,
       isDir: n.isDir,
       size: n.size ?? 0,
+      mtime: baseTime + (nodes.length - i) * 3_600_000,
       path: base + n.name,
     }))
     .sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name));

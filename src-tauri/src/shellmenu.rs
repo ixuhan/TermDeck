@@ -13,8 +13,8 @@ use windows::core::{PCSTR, PCWSTR};
 use windows::Win32::Foundation::{HWND, POINT};
 use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::UI::Shell::{
-    IContextMenu, IShellItem, SHCreateItemFromParsingName, BHID_SFUIObject,
-    CMINVOKECOMMANDINFOEX, CMF_NORMAL,
+    IContextMenu, IShellItem, ILFree, SHCreateItemFromIDList, SHCreateItemFromParsingName,
+    SHSimpleIDListFromPath, BHID_SFUIObject, CMINVOKECOMMANDINFOEX, CMF_NORMAL,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreatePopupMenu, DestroyMenu, SW_SHOWNORMAL, TPM_LEFTALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON,
@@ -29,6 +29,34 @@ const CMIC_MASK_ASYNCOK: u32 = 0x0010_0000;
 const ID_FIRST: u32 = 1;
 const ID_LAST: u32 = 0x7FFF;
 
+/// Resolves a filesystem path to an `IShellItem`.
+///
+/// `SHCreateItemFromParsingName` runs the path through Win32 normalisation,
+/// where any segment named `COM1`..`COM9`, `LPT1`..`LPT9`, `CON`, `PRN`, `AUX`
+/// or `NUL` is treated as a *device*, not a folder. Right-clicking a file under
+/// a log directory named `COM2` therefore fails with 0x800704B0
+/// ("指定的设备名无效") even though the folder is perfectly real.
+///
+/// `SHSimpleIDListFromPath` builds the PIDL directly from the filesystem path
+/// without that normalisation, so it handles those names. Try the standard
+/// route first (it also understands virtual shell paths) and fall back there.
+fn shell_item(wide: &[u16]) -> Result<IShellItem, String> {
+    unsafe {
+        let ptr = PCWSTR(wide.as_ptr());
+        if let Ok(item) = SHCreateItemFromParsingName::<_, _, IShellItem>(ptr, None) {
+            return Ok(item);
+        }
+
+        let pidl = SHSimpleIDListFromPath(ptr);
+        if pidl.is_null() {
+            return Err("解析路径失败：无法构造 shell 项".into());
+        }
+        let item = SHCreateItemFromIDList::<IShellItem>(pidl as *const _);
+        ILFree(Some(pidl as *const _));
+        item.map_err(|e| format!("解析路径失败: {e}"))
+    }
+}
+
 /// Shows the shell context menu for `path` at the given client coordinates.
 ///
 /// Blocking: returns once the user picks an item or dismisses the menu. Must be
@@ -38,8 +66,7 @@ pub fn show(path: &str, hwnd: HWND, x: i32, y: i32) -> Result<(), String> {
     unsafe {
         let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
 
-        let item: IShellItem = SHCreateItemFromParsingName(PCWSTR(wide.as_ptr()), None)
-            .map_err(|e| format!("解析路径失败: {e}"))?;
+        let item: IShellItem = shell_item(&wide)?;
         let ctx: IContextMenu = item
             .BindToHandler(None, &BHID_SFUIObject)
             .map_err(|e| format!("获取上下文菜单失败: {e}"))?;

@@ -15,6 +15,8 @@ pub struct DirEntryInfo {
     pub name: String,
     pub is_dir: bool,
     pub size: u64,
+    /// Last-modified time as Unix milliseconds; 0 when the OS cannot report it.
+    pub mtime: u64,
     pub path: String,
 }
 
@@ -82,11 +84,19 @@ pub fn list_dir(requested: &str) -> Result<DirListing, String> {
         }
         let name = item.file_name().to_string_lossy().to_string();
         let is_dir = item.file_type().map(|t| t.is_dir()).unwrap_or(false);
-        let size = item.metadata().map(|m| m.len()).unwrap_or(0);
+        let meta = item.metadata().ok();
+        let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let mtime = meta
+            .as_ref()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis().min(u128::from(u64::MAX)) as u64)
+            .unwrap_or(0);
         entries.push(DirEntryInfo {
             name,
             is_dir,
             size,
+            mtime,
             path: item.path().to_string_lossy().to_string(),
         });
     }

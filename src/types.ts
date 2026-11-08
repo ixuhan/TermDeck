@@ -135,8 +135,19 @@ export interface DirEntry {
   name: string;
   isDir: boolean;
   size: number;
+  /** Last-modified time as Unix milliseconds. */
+  mtime: number;
   path: string;
 }
+
+export type DirSortKey = "name" | "mtime" | "size" | "type";
+
+export const DIR_SORT_LABELS: Record<DirSortKey, string> = {
+  name: "名称",
+  mtime: "修改时间",
+  size: "大小",
+  type: "类型",
+};
 
 export interface DirListing {
   path: string;
@@ -201,6 +212,10 @@ export interface Settings {
   serialAutoRefresh: boolean;
   /** Prepend `[HH:MM:SS]` to every output line in the terminal. */
   lineTimestamps: boolean;
+  /** Column the file panel sorts by; folders stay grouped ahead of files. */
+  dirSortBy: DirSortKey;
+  /** Ascending (true) or descending (false) within each group. */
+  dirSortAsc: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -218,4 +233,6 @@ export const DEFAULT_SETTINGS: Settings = {
   restoreScrollback: true,
   serialAutoRefresh: false,
   lineTimestamps: false,
+  dirSortBy: "name",
+  dirSortAsc: true,
 };

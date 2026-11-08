@@ -42,6 +42,9 @@ user32.EnumWindows(WNDENUMPROC(_cb), 0)
 
 if "--close" in sys.argv:
     for f in found:
+        # Escape posted straight at the popup is what the shell menu loop
+        # consumes. Extra cancel modes / synthetic global keys turned out to
+        # leave TrackPopupMenu blocked, so keep this deliberately simple.
         user32.PostMessageW(f["hwnd"], WM_KEYDOWN, VK_ESCAPE, 0)
 
 print(json.dumps(found))

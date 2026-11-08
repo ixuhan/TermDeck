@@ -33,6 +33,7 @@ const BROWSER = [
 const DESKTOP = [
   "serialports-desktop.mjs",
   "contextmenu-desktop.mjs",
+  "contextmenu-reserved-desktop.mjs",
   "ctrlr-desktop.mjs",
   "scrollback-test.mjs",
   "serial-real-desktop.mjs",
@@ -68,7 +69,10 @@ function run(script) {
       const combined = `${stdout}\n${stderr}`;
       const fails = (combined.match(/^FAIL /gm) ?? []).length;
       const passes = (combined.match(/^PASS /gm) ?? []).length;
-      resolve({ name: script, passed: passes, failed: fails, output: combined });
+      // Port-dependent suites skip themselves when the virtual COM pair is
+      // held by another program; report that instead of an empty 0/0 line.
+      const skipped = /^SKIP /m.test(combined);
+      resolve({ name: script, passed: passes, failed: fails, skipped, output: combined });
     });
   });
 }
@@ -98,7 +102,7 @@ if (mode === "all" || mode === "browser" || mode === "quiet") {
       process.stdout.write(`  ${s.padEnd(22)}`);
       const r = await run(s);
       results.push(r);
-      console.log(`${r.passed} passed, ${r.failed} failed`);
+      console.log(r.skipped ? "SKIP" : `${r.passed} passed, ${r.failed} failed`);
       if (r.failed) console.log(r.output.split("\n").filter((l) => l.startsWith("FAIL")).join("\n"));
     }
   } finally {
@@ -121,7 +125,7 @@ if (mode === "all" || mode === "desktop" || mode === "quiet") {
     process.stdout.write(`  ${s.padEnd(22)}`);
     const r = await run(s);
     results.push(r);
-    console.log(`${r.passed} passed, ${r.failed} failed`);
+    console.log(r.skipped ? "SKIP" : `${r.passed} passed, ${r.failed} failed`);
     if (r.failed) {
       console.log(
         r.output
@@ -136,8 +140,10 @@ if (mode === "all" || mode === "desktop" || mode === "quiet") {
 
 const totalPass = results.reduce((n, r) => n + r.passed, 0);
 const totalFail = results.reduce((n, r) => n + r.failed, 0);
+const totalSkip = results.filter((r) => r.skipped).length;
 console.log(
   `\n==== 合计 ${totalPass} passed, ${totalFail} failed` +
+    (totalSkip ? `, ${totalSkip} skipped` : "") +
     (mode === "quiet" ? "（窗口全程未显示）" : "") +
     " ====",
 );

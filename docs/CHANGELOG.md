@@ -1,5 +1,24 @@
 # 变更记录
 
+### 文件目录排序
+
+- 新增「排序」工具条：名称 / 修改时间 / 大小 / 类型，附 ↑/↓ 升降序切换；
+  文件夹始终成组排在文件前，同值按名称稳定兜底
+- 按修改时间排序时行尾显示 `MM-DD HH:MM`，其余模式显示文件大小
+- 后端 `DirEntryInfo` 新增 `mtime`（Unix 毫秒）；排序在前端做，切换不重读目录
+- 排序方式是全局设置（`dirSortBy` / `dirSortAsc`），写入 settings.json 并随重启还原
+
+### 修复：COM2 等保留设备名目录右键报「指定的设备名无效」
+
+- 根因：`%Port` 生成的日志目录名 `COM1`..`COM9` 是 Windows 保留设备名，
+  `SHCreateItemFromParsingName` 走 Win32 路径规范化时把该段当设备，返回 0x800704B0。
+  实测 `\\?\` 前缀、8.3 短名、file URI、`IShellFolder::ParseDisplayName` 相对名均无效
+- 修法：标准解析失败后回退 `SHSimpleIDListFromPath` 直接按文件系统路径构造 PIDL，
+  再 `SHCreateItemFromIDList` 取 `IShellItem`；正常路径仍走原快速路径
+- 需为 `windows` crate 打开 `Win32_UI_Shell_Common` feature
+- 新增 `contextmenu-reserved-desktop.mjs`：真实应用里对 COM2 下的文件弹出原生菜单并验证，
+  顺带断言后端返回非零 `mtime`；普通路径仍由 `contextmenu-desktop.mjs` 覆盖
+
 ## v0.3.1 — 自动更新
 
 安装版可以自己检查并安装新版本。

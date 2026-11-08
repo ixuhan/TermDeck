@@ -1,13 +1,53 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { ipc } from "../ipc";
 import { useStore } from "../store";
-import type { DirListing, Session } from "../types";
+import { DIR_SORT_LABELS } from "../types";
+import type { DirEntry, DirListing, DirSortKey, Session } from "../types";
 
 function formatSize(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatTime(ms: number): string {
+  if (!ms) return "—";
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function extensionOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(dot).toLocaleLowerCase() : "";
+}
+
+/** Folders stay grouped ahead of files (Explorer habit) regardless of the key. */
+function sortEntries(entries: DirEntry[], key: DirSortKey, asc: boolean): DirEntry[] {
+  const dir = asc ? 1 : -1;
+  const byName = (a: DirEntry, b: DirEntry) =>
+    a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase());
+  return [...entries].sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    let c: number;
+    switch (key) {
+      case "mtime":
+        c = a.mtime - b.mtime;
+        break;
+      case "size":
+        c = a.size - b.size;
+        break;
+      case "type":
+        c = extensionOf(a.name).localeCompare(extensionOf(b.name));
+        break;
+      default:
+        c = byName(a, b);
+    }
+    // Stable, predictable tie-break so switching keys never scrambles equal rows.
+    if (c === 0) c = byName(a, b);
+    return c * dir;
+  });
 }
 
 function breadcrumbs(path: string): Array<{ label: string; full: string }> {
@@ -54,6 +94,9 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
   const setDirFixedPath = useStore((s) => s.setDirFixedPath);
   const showToast = useStore((s) => s.showToast);
   const height = useStore((s) => s.layout.dirHeight);
+  const sortBy = useStore((s) => s.settings.dirSortBy);
+  const sortAsc = useStore((s) => s.settings.dirSortAsc);
+  const setSettings = useStore((s) => s.setSettings);
 
   const [listing, setListing] = useState<DirListing | null>(null);
   const [loading, setLoading] = useState(false);
@@ -130,6 +173,10 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
   const shownPath = listing?.path ?? target;
   const sep = shownPath.includes("\\") ? "\\" : "/";
   const crumbs = breadcrumbs(shownPath);
+  const sortedEntries = useMemo(
+    () => sortEntries(listing?.entries ?? [], sortBy, sortAsc),
+    [listing, sortBy, sortAsc],
+  );
 
   return (
     <section className="dir-panel" style={{ height }}>
@@ -250,6 +297,31 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
         {session.dir.mode === "fixed" && <span className="dir-fixed-badge">已锁定</span>}
       </div>
 
+      <div className="dir-sortbar">
+        <span className="dir-sort-label">排序</span>
+        <select
+          className="dir-sort-select"
+          aria-label="排序方式"
+          value={sortBy}
+          onChange={(e) => setSettings({ dirSortBy: e.target.value as DirSortKey })}
+        >
+          {(Object.keys(DIR_SORT_LABELS) as DirSortKey[]).map((k) => (
+            <option key={k} value={k}>
+              {DIR_SORT_LABELS[k]}
+            </option>
+          ))}
+        </select>
+        <button
+          className="dir-sort-dir"
+          title={sortAsc ? "当前升序，点击改为降序" : "当前降序，点击改为升序"}
+          aria-label={sortAsc ? "改为降序" : "改为升序"}
+          onClick={() => setSettings({ dirSortAsc: !sortAsc })}
+        >
+          {sortAsc ? "↑" : "↓"}
+        </button>
+        <span className="dir-count">{listing?.entries.length ?? 0} 项</span>
+      </div>
+
       <div className="dir-list">
         {listing?.parent && (
           <div
@@ -274,7 +346,7 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
           <div className="dir-hint">空目录</div>
         )}
 
-        {listing?.entries.map((e) => (
+        {sortedEntries.map((e) => (
           <div
             key={e.path}
             className={`dir-row ${selected === e.path ? "is-selected" : ""}`}
@@ -299,7 +371,11 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
               {e.isDir ? <FolderIcon /> : <FileIcon />}
             </span>
             <span className="dir-name">{e.name}</span>
-            {!e.isDir && <span className="dir-size">{formatSize(e.size)}</span>}
+            {!e.isDir && (
+              <span className="dir-size">
+                {sortBy === "mtime" ? formatTime(e.mtime) : formatSize(e.size)}
+              </span>
+            )}
           </div>
         ))}
 
