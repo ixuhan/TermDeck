@@ -271,6 +271,16 @@ export const useStore = create<Store>((set, get) => {
             : defaultDir(s.shell_profile.cwd ?? ""),
         }));
 
+        // Serial sessions restored from disk need registering too, otherwise
+        // their log folder cannot be revealed until the port is opened.
+        for (const s of sessions) {
+          if (s.kind === "serial" && s.serial) {
+            void ipc
+              .serialRegister(s.key, s.serial.config, s.serial.view, s.serial.log)
+              .catch(() => undefined);
+          }
+        }
+
         const activeKey =
           sessions.find((x) => x.key === saved.active_session_id)?.key ?? sessions[0].key;
 
@@ -386,6 +396,11 @@ export const useStore = create<Store>((set, get) => {
         dir: { visible: false, mode: "fixed", fixedPath: null, currentPath: "" },
       };
       set((s) => ({ sessions: [...s.sessions, draft], activeKey: draft.key }));
+      // Register before opening: the log folder must be reachable even when the
+      // port fails to open or is paused later.
+      await ipc
+        .serialRegister(draft.key, config, draft.serial!.view, draft.serial!.log)
+        .catch(() => undefined);
       try {
         const spawned = await spawn(draft);
         set((s) => ({

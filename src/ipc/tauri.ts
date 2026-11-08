@@ -135,6 +135,9 @@ export function createTauriIpc(): Ipc {
 
     listSerialPorts: () => invoke<SerialPort[]>("list_serial_ports"),
 
+    serialRegister: (sessionKey, config, view, log) =>
+      invoke("serial_register", { sessionKey, config, view, log }),
+
     serialOpen: (sessionKey, config, view, log) =>
       invoke("serial_open", { sessionKey, config, view, log }),
 

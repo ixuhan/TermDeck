@@ -19,6 +19,8 @@ const APP_PORT = "COM2";
 const PEER_PORT = "COM7";
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const out = [];
+/** Peer processes; killed in finally so they never keep COM7 open. */
+const peers = [];
 const ok = (name, cond, extra = "") =>
   out.push(`${cond ? "PASS" : "FAIL"} ${name}${extra ? " :: " + extra : ""}`);
 
@@ -115,6 +117,7 @@ try {
     ["scripts/serial_peer.py", "read", PEER_PORT, "3500"],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
+  peers.push(reader);
   let peerGot = "";
   reader.stdout.on("data", (d) => (peerGot += d));
   // Wait for the peer to report READY instead of guessing a delay.
@@ -164,6 +167,7 @@ try {
   const reader2 = spawn("python", ["scripts/serial_peer.py", "read", PEER_PORT, "3500"], {
     stdio: ["ignore", "pipe", "pipe"],
   });
+  peers.push(reader2);
   let uiGot = "";
   reader2.stdout.on("data", (d) => (uiGot += d));
   await new Promise((resolve) => {
@@ -201,6 +205,13 @@ try {
   console.log(out.join("\n"));
   const fails = out.filter((l) => l.startsWith("FAIL"));
   console.log(`\n==== ${out.filter((l) => l.startsWith("PASS")).length} passed, ${fails.length} failed ====`);
+  for (const p of peers) {
+    try {
+      p.kill("SIGKILL");
+    } catch {
+      /* already gone */
+    }
+  }
   try {
     execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: "ignore" });
   } catch {

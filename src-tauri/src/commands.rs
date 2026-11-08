@@ -438,19 +438,26 @@ pub fn serial_write_bytes(
     app_state.serial.write(&session_key, &bytes)
 }
 
+/// Registers a serial session without opening the port, so its log path is
+/// known immediately (the folder can be revealed before the first connection).
+#[tauri::command]
+pub fn serial_register(
+    app_state: State<'_, AppState>,
+    session_key: String,
+    config: crate::serial::SerialConfig,
+    view: crate::serial::SerialView,
+    log: crate::serial::LogConfig,
+) -> Result<(), String> {
+    app_state.serial.register(&session_key, config, view, log)
+}
+
 /// Opens the folder holding this session's log file.
+///
+/// Works while the port is closed: the directory comes from the template, not
+/// from an open file handle.
 #[tauri::command]
 pub fn serial_reveal_log(app_state: State<'_, AppState>, session_key: String) -> Result<(), String> {
-    let status = app_state.serial.status(&session_key);
-    let Some(path) = status.log_path else {
-        return Err("该会话没有开启日志记录".into());
-    };
-    let dir = std::path::Path::new(&path)
-        .parent()
-        .ok_or_else(|| "无法定位日志目录".to_string())?;
-    if !dir.exists() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
+    let dir = app_state.serial.log_dir(&session_key)?;
     crate::fsview::open_with_default(&dir.display().to_string())
 }
 

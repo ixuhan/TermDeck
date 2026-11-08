@@ -431,6 +431,15 @@ const dataCbs = new Set<DataCb>();
       // the right-click does not fall through to the browser menu.
     },
 
+    async serialRegister(sessionKey) {
+      mockSerial.set(sessionKey, {
+        open: false,
+        paused: false,
+        baud: 0,
+        logPath: null,
+      });
+    },
+
     async serialOpen(sessionKey, config) {
       mockSerial.set(sessionKey, {
         open: true,

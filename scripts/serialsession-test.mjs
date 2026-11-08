@@ -87,6 +87,24 @@ try {
   await page.waitForTimeout(600);
   ok("应用后弹窗关闭", (await page.locator(".modal-serial").count()) === 0);
 
+  // ---- log folder shortcut appears only when logging is on ------------------
+  await item.hover();
+  const actionsBefore = await item.locator(".serial-actions button").count();
+  await item.locator(".serial-actions button").last().click();
+  await page.waitForSelector(".modal-serial", { timeout: 5000 });
+  await page.waitForTimeout(300);
+  const logRow = page.locator(".modal-serial .set-row", { hasText: "保存接收数据到文件" });
+  await logRow.locator(".set-check").check();
+  await page.waitForTimeout(400);
+  await page.locator(".modal-foot .mini-btn", { hasText: "应用" }).click();
+  await page.waitForTimeout(600);
+  await item.hover();
+  const actionsAfter = await item.locator(".serial-actions button").count();
+  out.push(`INFO actions ${actionsBefore} -> ${actionsAfter}`);
+  ok("开启日志后出现文件夹快捷按钮", actionsAfter === actionsBefore + 1, `${actionsBefore} -> ${actionsAfter}`);
+  const logBtn = item.locator('.serial-actions button[title="打开日志文件夹"]');
+  ok("按钮语义为打开日志文件夹", (await logBtn.count()) === 1, String(await logBtn.count()));
+
   // ---- pause / resume ------------------------------------------------------
   await item.hover();
   await item.locator(".serial-actions button").nth(0).click();

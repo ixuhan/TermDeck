@@ -134,6 +134,17 @@ export interface Ipc {
    */
   showContextMenu(path: string, x: number, y: number): Promise<void>;
 
+  /**
+   * Records a session's settings without opening the port, so the log folder
+   * can be revealed before the first connection.
+   */
+  serialRegister(
+    sessionKey: string,
+    config: SerialConfig,
+    view: SerialView,
+    log: SerialLogConfig,
+  ): Promise<void>;
+
   /** Opens (or reopens) the serial port for a serial session. */
   serialOpen(
     sessionKey: string,

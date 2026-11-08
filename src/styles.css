@@ -2091,3 +2091,20 @@ body.is-resizing-v {
   background: var(--accent-soft);
   color: var(--accent);
 }
+
+.serial-template-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.serial-template-row .serial-tokens {
+  flex: 1 1 auto;
+}
+
+.serial-pick {
+  flex: 0 0 auto;
+  height: 22px;
+  font-size: 11px;
+  margin-top: -2px;
+}

@@ -126,13 +126,69 @@ struct SerialSession {
 
 pub struct SerialManager {
     sessions: Mutex<std::collections::HashMap<String, Arc<SerialSession>>>,
+    /// Needed to resolve relative log templates even while the port is closed.
+    data_dir: PathBuf,
 }
 
 impl SerialManager {
-    pub fn new() -> Self {
+    pub fn new(data_dir: PathBuf) -> Self {
         Self {
             sessions: Mutex::new(std::collections::HashMap::new()),
+            data_dir,
         }
+    }
+
+    /// Records a session without opening the port, so its log path is known
+    /// before (and after) the port is opened.
+    pub fn register(
+        &self,
+        id: &str,
+        config: SerialConfig,
+        view: SerialView,
+        log: LogConfig,
+    ) -> Result<(), String> {
+        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+        let session = sessions.entry(id.to_string()).or_insert_with(|| {
+            Arc::new(SerialSession {
+                config: Mutex::new(SerialConfig::default()),
+                view: Mutex::new(SerialView::default()),
+                log: Mutex::new(LogConfig::default()),
+                open: Mutex::new(None),
+                backlog: Mutex::new(Vec::new()),
+                alive: AtomicBool::new(false),
+                paused: AtomicBool::new(false),
+                log_path: Mutex::new(None),
+            })
+        });
+        *session.config.lock().map_err(|e| e.to_string())? = config;
+        *session.view.lock().map_err(|e| e.to_string())? = view;
+        *session.log.lock().map_err(|e| e.to_string())? = log;
+        Ok(())
+    }
+
+    /// Path the current template resolves to, whether or not the port is open.
+    pub fn log_path(&self, id: &str) -> Option<PathBuf> {
+        let session = self.get(id).ok()?;
+        let log = session.log.lock().ok()?.clone();
+        if !log.enabled {
+            return None;
+        }
+        let config = session.config.lock().ok()?.clone();
+        resolve_log_path(&log.template, &config, &self.data_dir)
+    }
+
+    /// Directory to reveal for this session; created if it does not exist yet.
+    pub fn log_dir(&self, id: &str) -> Result<PathBuf, String> {
+        let path = self
+            .log_path(id)
+            .ok_or_else(|| "该会话未开启日志记录".to_string())?;
+        let dir = path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .filter(|p| !p.as_os_str().is_empty())
+            .ok_or_else(|| "无法定位日志目录".to_string())?;
+        std::fs::create_dir_all(&dir).map_err(|e| format!("创建日志目录失败: {e}"))?;
+        Ok(dir)
     }
 
     pub fn has(&self, id: &str) -> bool {
@@ -193,12 +249,8 @@ impl SerialManager {
             .try_clone()
             .map_err(|e| format!("复制串口句柄失败: {e}"))?;
 
-        let log_path = if log.enabled && !log.template.trim().is_empty() {
-            Some(data_dir.join(render_template(
-                &log.template,
-                &config,
-                &chrono::Local::now(),
-            )))
+        let log_path = if log.enabled {
+            resolve_log_path(&log.template, &config, data_dir)
         } else {
             None
         };
@@ -414,15 +466,22 @@ impl SerialManager {
                 log_path: None,
             };
         };
+        // Resolve from the current settings first: the user may have changed the
+        // template since the port was opened. The cached path (from the open
+        // file handle) is only a fallback.
+        let cached = session
+            .log_path
+            .lock()
+            .ok()
+            .and_then(|p| p.as_ref().map(|x| x.display().to_string()));
+        let resolved = self.log_path(id).map(|p| p.display().to_string());
+        let log_path = resolved.or(cached);
+
         SerialStatus {
             open: session.open.lock().map(|o| o.is_some()).unwrap_or(false),
             paused: session.paused.load(Ordering::SeqCst),
             alive: session.alive.load(Ordering::SeqCst),
-            log_path: session
-                .log_path
-                .lock()
-                .ok()
-                .and_then(|p| p.as_ref().map(|x| x.display().to_string())),
+            log_path,
         }
     }
 
@@ -501,6 +560,41 @@ fn format_open_error(port: &str, e: serialport::Error) -> String {
     }
 }
 
+/// Windows forbids `: < > " | ? *` in file names, but the drive-letter colon
+/// must survive (`F://logs` is valid, `F-\logs` is a different folder).
+fn sanitize_path(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for (i, ch) in input.chars().enumerate() {
+        let keep_drive_colon = i == 1 && ch == ':' && input.as_bytes().first().is_some_and(u8::is_ascii_alphabetic);
+        if keep_drive_colon {
+            out.push(':');
+        } else if matches!(ch, ':' | '<' | '>' | '"' | '|' | '?' | '*') {
+            out.push('-');
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// Resolves a log template to a concrete path.
+///
+/// An absolute template (e.g. `D://serial//%Port//%Y%M%D.log`) is used as-is;
+/// anything relative is resolved against the app data directory.
+pub fn resolve_log_path(template: &str, cfg: &SerialConfig, data_dir: &Path) -> Option<PathBuf> {
+    let trimmed = template.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let rendered = render_template(trimmed, cfg, &chrono::Local::now());
+    let path = Path::new(&rendered);
+    Some(if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        data_dir.join(path)
+    })
+}
+
 /// Expands `%Y %M %D %h %m %s %Port %Baud %Date` in a log file template.
 pub fn render_template(
     tpl: &str,
@@ -543,8 +637,7 @@ pub fn render_template(
             }
         }
     }
-    // Windows file names cannot contain a colon.
-    out.replace(':', "-")
+    sanitize_path(&out)
 }
 
 /// Turns the raw byte stream into what the terminal should display.

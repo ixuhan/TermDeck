@@ -25,6 +25,8 @@ pub fn run() {
         // background unless the UI asks for it.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // Folder picker for the serial log path.
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let fallback = app
                 .path()
@@ -37,6 +39,7 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
 
             let paths = workspace::AppPaths::new(dir);
+            let paths_for_serial = paths.dir().to_path_buf();
             logging::init(paths.dir());
             logging::info(format!("app starting, data dir = {}", paths.dir().display()));
 
@@ -56,7 +59,7 @@ pub fn run() {
 
             app.manage(AppState {
                 pty: pty::PtyManager::new(),
-                serial: serial::SerialManager::new(),
+                serial: serial::SerialManager::new(paths_for_serial.clone()),
                 history,
                 paths,
             });
@@ -91,6 +94,7 @@ pub fn run() {
             commands::serial_update,
             commands::serial_write_bytes,
             commands::serial_reveal_log,
+            commands::serial_register,
             commands::scrollback_save,
             commands::scrollback_load,
             commands::scrollback_clear,

@@ -25,6 +25,7 @@ export function LeftRail() {
   const pauseSerial = useStore((s) => s.pauseSerial);
   const resumeSerial = useStore((s) => s.resumeSerial);
   const updateSerial = useStore((s) => s.updateSerial);
+  const showToast = useStore((s) => s.showToast);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -184,6 +185,27 @@ export function LeftRail() {
                     >
                       {s.serial.paused ? "▶" : "⏸"}
                     </button>
+                    {s.serial.log.enabled && (
+                      <button
+                        title="打开日志文件夹"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void ipc
+                            .serialRevealLog(s.key)
+                            .catch((err) => showToast(`无法打开日志目录：${String(err)}`));
+                        }}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+                          <path
+                            d="M1.8 4.2h4l1.3 1.6h7.1v6.6H1.8z"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.3"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    )}
                     <button
                       title="串口设置"
                       onClick={(e) => {

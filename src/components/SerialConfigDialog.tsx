@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { ipc } from "../ipc";
 import { useStore } from "../store";
 import {
@@ -302,13 +303,39 @@ export function SerialConfigDialog({
               onChange={(e) => setLog({ ...log, template: e.target.value })}
               onBlur={() => void applyLog(log)}
             />
-            <div className="serial-tokens">
-              <code>%Y</code> 年 <code>%M</code> 月 <code>%D</code> 日 <code>%h</code> 时{" "}
-              <code>%m</code> 分 <code>%s</code> 秒 <code>%Port</code> 端口 <code>%Baud</code>{" "}
-              波特率 <code>%Date</code> 完整时间
+            <div className="serial-template-row">
+              <div className="serial-tokens">
+                <code>%Y</code> 年 <code>%M</code> 月 <code>%D</code> 日 <code>%h</code> 时{" "}
+                <code>%m</code> 分 <code>%s</code> 秒 <code>%Port</code> 端口{" "}
+                <code>%Baud</code> 波特率 <code>%Date</code> 完整时间
+              </div>
+              <button
+                className="mini-btn is-ghost serial-pick"
+                title="选择日志保存目录"
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      const picked = await openDialog({
+                        directory: true,
+                        multiple: false,
+                        title: "选择日志保存目录",
+                      });
+                      if (typeof picked !== "string") return;
+                      const next = `${picked}\\%Port\\%Y%M%D-%h%m%s.log`;
+                      setLog({ ...log, template: next, enabled: true });
+                      await applyLog({ ...log, template: next, enabled: true });
+                    } catch (e) {
+                      showToast(`选择目录失败：${String(e)}`);
+                    }
+                  })();
+                }}
+              >
+                浏览…
+              </button>
             </div>
             <div className="serial-tokens is-muted">
-              相对数据目录（data/），示例：<code>logs/%Port/%Y%M%D-%h%m%s.log</code>
+              可填绝对路径（如 <code>D:\serial\%Port\%Y%M%D.log</code>），
+              也可填相对 <code>data/</code> 的路径
             </div>
           </div>
 
