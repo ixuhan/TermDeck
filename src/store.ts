@@ -251,6 +251,8 @@ export const useStore = create<Store>((set, get) => {
         : DEFAULT_SETTINGS;
 
       set({ presets, settings, dataDir: dir });
+      // Serial log writers live in the backend and cannot see the JS store.
+      void ipc.setLineTimestamps(settings.lineTimestamps).catch(() => undefined);
 
       if (saved && saved.sessions.length > 0) {
         const sessions: Session[] = saved.sessions.map((s) => ({
@@ -847,6 +849,11 @@ export const useStore = create<Store>((set, get) => {
     setSettings(patch) {
       set((s) => ({ settings: { ...s.settings, ...patch } }));
       void ipc.settingsSave({ ...get().settings }).catch(() => undefined);
+      // Reader threads read this flag on their next chunk, so log files pick up
+      // the change immediately even while a port is open.
+      if (patch.lineTimestamps !== undefined) {
+        void ipc.setLineTimestamps(patch.lineTimestamps).catch(() => undefined);
+      }
       schedule();
     },
 

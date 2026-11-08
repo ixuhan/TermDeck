@@ -172,6 +172,9 @@ export interface Ipc {
   /** Opens the folder containing this session's log file. */
   serialRevealLog(sessionKey: string): Promise<void>;
 
+  /** Mirrors the global per-line timestamp switch to serial log writers. */
+  setLineTimestamps(enabled: boolean): Promise<void>;
+
   /** Read-only COM port listing; no port is opened on the backend side. */
   listSerialPorts(): Promise<SerialPort[]>;
 

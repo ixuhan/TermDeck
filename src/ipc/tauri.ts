@@ -155,6 +155,8 @@ export function createTauriIpc(): Ipc {
 
     serialRevealLog: (sessionKey) => invoke("serial_reveal_log", { sessionKey }),
 
+    setLineTimestamps: (enabled) => invoke("set_line_timestamps", { enabled }),
+
     showContextMenu: (path, x, y) => invoke("show_context_menu", { path, x, y }),
 
     installKind: () => invoke<InstallKind>("install_kind"),

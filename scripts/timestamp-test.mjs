@@ -73,6 +73,10 @@ if (await box.isChecked()) {
 ok("默认关闭", !(await box.isChecked()));
 await box.check();
 await page.waitForTimeout(250);
+ok(
+  "开关已同步到后端（日志写入线程）",
+  await page.evaluate(() => window.__mockLineTimestamps === true),
+);
 await closeSettings();
 
 // ---- stamped output ---------------------------------------------------------
@@ -112,12 +116,30 @@ ok(
   plainLines.length > 0 && plainLines.every((l) => !STAMP.test(l)),
   plainLines.join(" | "),
 );
+ok(
+  "关闭状态同步到后端（日志停止加时间）",
+  await page.evaluate(() => window.__mockLineTimestamps === false),
+);
 await page.locator(".term-pane.is-active").screenshot({ path: `${OUT}/ts02-plain.png` });
 
 // ---- setting survives a reload ---------------------------------------------
 row = await openSettings();
 ok("关闭状态已持久化", !(await row.locator(".set-check").isChecked()));
 await closeSettings();
+
+// ---- boot pushes the persisted value to the backend ------------------------
+await page.evaluate(() => {
+  const s = JSON.parse(localStorage.getItem("termdeck.settings") || "{}");
+  s.lineTimestamps = true;
+  localStorage.setItem("termdeck.settings", JSON.stringify(s));
+});
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.waitForSelector(".cmd-input", { timeout: 20000 });
+await page.waitForTimeout(1200);
+ok(
+  "重启后后端恢复为开启状态",
+  await page.evaluate(() => window.__mockLineTimestamps === true),
+);
 
 console.log(logs.join("\n"));
 await browser.close();

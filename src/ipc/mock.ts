@@ -495,6 +495,12 @@ const dataCbs = new Set<DataCb>();
       /* browser preview has no file system */
     },
 
+    async setLineTimestamps(enabled) {
+      // Dev preview has no log file; expose the flag so browser tests can at
+      // least assert the settings panel really forwards it to the backend.
+      (window as unknown as Record<string, unknown>).__mockLineTimestamps = enabled;
+    },
+
     async listSerialPorts() {
       // Browser preview: a plausible mix so the panel can be exercised.
       return [

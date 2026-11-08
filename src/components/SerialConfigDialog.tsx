@@ -285,7 +285,9 @@ export function SerialConfigDialog({
           <label className="set-row">
             <div className="set-text">
               <span className="set-label">保存接收数据到文件</span>
-              <span className="set-hint">追加写入；暂停时关闭文件</span>
+              <span className="set-hint">
+                追加写入；暂停时关闭文件。开启「设置 → 每行开头显示时间」后，日志每行也会带 [时:分:秒]
+              </span>
             </div>
             <input
               type="checkbox"

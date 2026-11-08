@@ -128,6 +128,9 @@ pub struct SerialManager {
     sessions: Mutex<std::collections::HashMap<String, Arc<SerialSession>>>,
     /// Needed to resolve relative log templates even while the port is closed.
     data_dir: PathBuf,
+    /// Mirrors the global "每行开头显示时间" setting. Read by every reader
+    /// thread, so toggling it takes effect on the very next chunk.
+    timestamps: Arc<AtomicBool>,
 }
 
 impl SerialManager {
@@ -135,7 +138,14 @@ impl SerialManager {
         Self {
             sessions: Mutex::new(std::collections::HashMap::new()),
             data_dir,
+            timestamps: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// The settings panel toggles this; log files then carry the same plain-text
+    /// `[HH:MM:SS] ` prefix the terminal shows (minus the ANSI dimming).
+    pub fn set_timestamps(&self, enabled: bool) {
+        self.timestamps.store(enabled, Ordering::SeqCst);
     }
 
     /// Records a session without opening the port, so its log path is known
@@ -302,6 +312,9 @@ impl SerialManager {
 
         let app_for_reader = app.clone();
         let session_for_reader = session.clone();
+        // Global "每行开头显示时间" switch; read per chunk so it can be toggled
+        // while the port is open.
+        let stamps = self.timestamps.clone();
         // Must match the frontend's `ptyId` (`serial:<key>`), otherwise the
         // terminal filters every event out as belonging to another session.
         let id_for_reader = format!("serial:{id}");
@@ -314,6 +327,7 @@ impl SerialManager {
             .name(format!("serial-{id}"))
             .spawn(move || {
                 let mut formatter = Formatter::new();
+                let mut log_stamper = LogStamper::new();
                 let mut port = reader_port;
                 let mut buf = [0u8; 4096];
 
@@ -325,14 +339,34 @@ impl SerialManager {
                         Ok(0) => continue,
                         Ok(n) => {
                             let chunk = &buf[..n];
+                            let cr_mode = session_for_reader
+                                .view
+                                .lock()
+                                .map(|v| v.cr_as_newline)
+                                .unwrap_or(true);
 
                             if let Ok(mut guard) = log_file.lock() {
                                 if let Some(file) = guard.as_mut() {
-                                    let _ = if log_as_hex {
-                                        file.write_all(hex_line(chunk).as_bytes())
+                                    // Plain text on purpose: no ANSI in log files.
+                                    let stamp = if stamps.load(Ordering::SeqCst) {
+                                        format!(
+                                            "[{}] ",
+                                            chrono::Local::now().format("%H:%M:%S")
+                                        )
+                                        .into_bytes()
                                     } else {
-                                        file.write_all(chunk)
+                                        Vec::new()
                                     };
+                                    let raw = if log_as_hex {
+                                        hex_line(chunk).into_bytes()
+                                    } else {
+                                        chunk.to_vec()
+                                    };
+                                    // Always run the stamper (with an empty
+                                    // stamp when off) so its line state stays
+                                    // correct when the switch is flipped.
+                                    let logged = log_stamper.process(&raw, &stamp, cr_mode);
+                                    let _ = file.write_all(&logged);
                                     // 115200 baud is ~11 KB/s: flushing per chunk is
                                     // cheap and keeps a crash from losing the tail.
                                     let _ = file.flush();
@@ -344,11 +378,6 @@ impl SerialManager {
                                 .lock()
                                 .map(|v| v.hex)
                                 .unwrap_or(false);
-                            let cr_mode = session_for_reader
-                                .view
-                                .lock()
-                                .map(|v| v.cr_as_newline)
-                                .unwrap_or(true);
                             let text = formatter.render(chunk, hex, cr_mode);
 
                             if !text.is_empty() {
@@ -754,6 +783,173 @@ impl Formatter {
     }
 }
 
+// ----------------------------------------------------------------- log stamps
+
+/// Escape-sequence state, so a line made only of control sequences is not
+/// mistaken for real output. Mirrors the frontend's `LineStamper`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EscapeState {
+    None,
+    Esc,
+    Csi,
+    Osc,
+    OscEsc,
+}
+
+/// Inserts a plain-text `[HH:MM:SS] ` at the start of every line written to a
+/// serial log file.
+///
+/// Deliberately plain text rather than ANSI: logs are opened in editors and
+/// piped through grep, where `\x1b[2m` would just be noise. Other than the
+/// inserted prefixes, the byte stream is passed through untouched, so binary
+/// payloads stay byte-accurate.
+///
+/// State lives across reads: a device can split a line (or `\r\n`) between
+/// chunks, and a stamp must not be duplicated or dropped at the boundary.
+struct LogStamper {
+    /// No non-whitespace byte on this line yet: a stamp may still be owed.
+    owed: bool,
+    at_line_start: bool,
+    /// Bytes held back while `owed` is true (whitespace and controls).
+    pending: Vec<u8>,
+    /// Last byte was a lone `\r`; the line ends only when we see what follows,
+    /// so `\r\n` counts as one break rather than two.
+    pending_cr: bool,
+    escape: EscapeState,
+}
+
+impl LogStamper {
+    fn new() -> Self {
+        Self {
+            owed: true,
+            at_line_start: true,
+            pending: Vec::new(),
+            pending_cr: false,
+            escape: EscapeState::None,
+        }
+    }
+
+    fn emit(&mut self, out: &mut Vec<u8>, b: u8) {
+        if self.owed {
+            self.pending.push(b);
+        } else {
+            out.push(b);
+        }
+    }
+
+    /// Ends the line without a stamp (blank line or redraw).
+    fn end_line(&mut self, out: &mut Vec<u8>) {
+        if self.owed {
+            out.append(&mut self.pending);
+        }
+        self.owed = true;
+        self.at_line_start = true;
+    }
+
+    /// First real content: put the stamp at column 0, before any indentation.
+    fn commit(&mut self, out: &mut Vec<u8>, stamp: &[u8]) {
+        if self.owed {
+            out.extend_from_slice(stamp);
+            out.append(&mut self.pending);
+            self.owed = false;
+        }
+        self.at_line_start = false;
+    }
+
+    /// A bare `\r` before any content repaints the current line; never stamp it.
+    fn abandon(&mut self, out: &mut Vec<u8>) {
+        if self.owed {
+            out.append(&mut self.pending);
+            self.owed = false;
+        }
+        self.at_line_start = false;
+    }
+
+    fn step_escape(&mut self, b: u8) {
+        self.escape = match self.escape {
+            EscapeState::Esc => match b {
+                b'[' => EscapeState::Csi,
+                b']' => EscapeState::Osc,
+                _ => EscapeState::None,
+            },
+            // CSI ends on a final byte 0x40..=0x7E.
+            EscapeState::Csi if (0x40..=0x7E).contains(&b) => EscapeState::None,
+            EscapeState::Csi => EscapeState::Csi,
+            EscapeState::Osc if b == 0x07 => EscapeState::None,
+            EscapeState::Osc if b == 0x1b => EscapeState::OscEsc,
+            EscapeState::Osc => EscapeState::Osc,
+            EscapeState::OscEsc if b == b'\\' => EscapeState::None,
+            EscapeState::OscEsc => EscapeState::Osc,
+            EscapeState::None => EscapeState::None,
+        };
+    }
+
+    /// @param stamp empty to disable stamping while still tracking line state
+    /// @param cr_breaks_line whether a lone `\r` starts a new line (the
+    ///        frontend's `crAsNewline` view option)
+    fn process(&mut self, chunk: &[u8], stamp: &[u8], cr_breaks_line: bool) -> Vec<u8> {
+        let mut out = Vec::with_capacity(chunk.len());
+        for &b in chunk {
+            if self.escape != EscapeState::None {
+                self.emit(&mut out, b);
+                self.step_escape(b);
+                continue;
+            }
+
+            match b {
+                0x1b => {
+                    self.resolve_pending_cr(&mut out, cr_breaks_line);
+                    self.emit(&mut out, b);
+                    self.escape = EscapeState::Esc;
+                    continue;
+                }
+                b'\n' => {
+                    self.emit(&mut out, b);
+                    self.end_line(&mut out);
+                    self.pending_cr = false;
+                    continue;
+                }
+                b'\r' if cr_breaks_line => {
+                    // If a previous lone CR is still waiting, it was a real
+                    // line break; close it before starting another one.
+                    self.resolve_pending_cr(&mut out, cr_breaks_line);
+                    self.emit(&mut out, b);
+                    self.pending_cr = true;
+                    continue;
+                }
+                b'\r' => {
+                    // Raw mode: a redraw, not a new line in the file.
+                    if self.at_line_start && self.owed {
+                        self.abandon(&mut out);
+                    }
+                    self.emit(&mut out, b);
+                    continue;
+                }
+                _ => {}
+            }
+
+            self.resolve_pending_cr(&mut out, cr_breaks_line);
+
+            // Other controls and whitespace do not make a line "real".
+            if b < 0x20 || b == 0x7f || b == b' ' || b == b'\t' {
+                self.emit(&mut out, b);
+                continue;
+            }
+            self.commit(&mut out, stamp);
+            out.push(b);
+        }
+        out
+    }
+
+    /// A lone `\r` becomes a line break once a non-`\n` byte follows it.
+    fn resolve_pending_cr(&mut self, out: &mut Vec<u8>, cr_breaks_line: bool) {
+        if cr_breaks_line && self.pending_cr {
+            self.pending_cr = false;
+            self.end_line(out);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -822,5 +1018,85 @@ mod tests {
         let cfg = SerialConfig::default();
         let out = render_template("%Nope.log", &cfg, &chrono::Local::now());
         assert_eq!(out, "%Nope.log");
+    }
+
+    // ---- log timestamps ---------------------------------------------------
+    fn stamped(chunks: &[&[u8]], stamp: &[u8], cr: bool) -> String {
+        let mut s = LogStamper::new();
+        let mut out = Vec::new();
+        for c in chunks {
+            out.extend_from_slice(&s.process(c, stamp, cr));
+        }
+        String::from_utf8(out).unwrap()
+    }
+
+    const T: &[u8] = b"<T> ";
+
+    #[test]
+    fn log_stamp_first_line_and_after_newline() {
+        assert_eq!(stamped(&[b"a\nb\nc"], T, true), "<T> a\n<T> b\n<T> c");
+    }
+
+    #[test]
+    fn log_crlf_is_one_break() {
+        assert_eq!(stamped(&[b"a\r\nb"], T, true), "<T> a\r\n<T> b");
+    }
+
+    #[test]
+    fn log_crlf_split_across_reads() {
+        assert_eq!(stamped(&[b"a\r", b"\nb"], T, true), "<T> a\r\n<T> b");
+    }
+
+    #[test]
+    fn log_lone_cr_breaks_when_enabled() {
+        assert_eq!(stamped(&[b"a\rb"], T, true), "<T> a\r<T> b");
+    }
+
+    #[test]
+    fn log_lone_cr_is_a_redraw_in_raw_mode() {
+        assert_eq!(stamped(&[b"\rprogress"], T, false), "\rprogress");
+    }
+
+    #[test]
+    fn log_blank_and_whitespace_lines_are_not_stamped() {
+        assert_eq!(stamped(&[b"a\n\n   \nb"], T, true), "<T> a\n\n   \n<T> b");
+    }
+
+    #[test]
+    fn log_indent_keeps_stamp_at_column_zero() {
+        assert_eq!(stamped(&[b"  indented"], T, true), "<T>   indented");
+    }
+
+    #[test]
+    fn log_escape_only_line_is_not_stamped() {
+        assert_eq!(
+            stamped(&[b"\x1b[2K\x1b[0m\nreal"], T, true),
+            "\x1b[2K\x1b[0m\n<T> real"
+        );
+    }
+
+    #[test]
+    fn log_line_split_across_reads_is_stamped_once() {
+        assert_eq!(stamped(&[b"ab", b"cd\nef"], T, true), "<T> abcd\n<T> ef");
+    }
+
+    #[test]
+    fn log_disabled_leaves_bytes_untouched_but_tracks_state() {
+        let mut s = LogStamper::new();
+        let mut out = s.process(b"abc", &[], true);
+        out.extend_from_slice(&s.process(b"def", &[], true));
+        out.extend_from_slice(&s.process(b"\nx", T, true));
+        assert_eq!(String::from_utf8(out).unwrap(), "abcdef\n<T> x");
+    }
+
+    #[test]
+    fn log_hex_rows_each_get_a_stamp() {
+        // hex_line() emits one CRLF-terminated row per chunk.
+        let row1 = hex_line(&[0x41, 0x42]);
+        let row2 = hex_line(&[0x43]);
+        assert_eq!(
+            stamped(&[row1.as_bytes(), row2.as_bytes()], T, true),
+            format!("<T> {row1}<T> {row2}")
+        );
     }
 }

@@ -413,6 +413,14 @@ pub fn serial_status(
     app_state.serial.status(&session_key)
 }
 
+/// Mirrors the global "每行开头显示时间" setting into the serial manager so
+/// log files get the same per-line prefixes as the terminal. Called on boot and
+/// whenever the user toggles it, so it also works while a port is open.
+#[tauri::command]
+pub fn set_line_timestamps(app_state: State<'_, AppState>, enabled: bool) {
+    app_state.serial.set_timestamps(enabled);
+}
+
 #[tauri::command]
 pub fn serial_update(
     app_state: State<'_, AppState>,

@@ -176,7 +176,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
           <Toggle
             label="每行开头显示时间"
-            hint="在输出每行前插入 [时:分:秒]，串口调试常用；全屏程序（vim / ssh）不受影响"
+            hint="在输出每行前插入 [时:分:秒]，串口日志文件也同步写入；全屏程序（vim / ssh）不受影响"
             checked={settings.lineTimestamps}
             onChange={(v) => setSettings({ lineTimestamps: v })}
           />

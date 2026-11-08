@@ -95,6 +95,7 @@ pub fn run() {
             commands::serial_write_bytes,
             commands::serial_reveal_log,
             commands::serial_register,
+            commands::set_line_timestamps,
             commands::scrollback_save,
             commands::scrollback_load,
             commands::scrollback_clear,

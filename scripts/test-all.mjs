@@ -38,6 +38,7 @@ const DESKTOP = [
   "serial-real-desktop.mjs",
   "serial-logpath-desktop.mjs",
   "serial-loopback-desktop.mjs",
+  "serial-logstamp-desktop.mjs",
   "timestamp-desktop.mjs",
 ];
 
