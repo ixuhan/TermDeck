@@ -18,7 +18,11 @@ const EXE = path.resolve("src-tauri/target/release/termdeck.exe");
 const DATA = path.resolve("src-tauri/target/release/data");
 const SETTINGS = path.join(DATA, "settings.json");
 const LOG_DIR = path.resolve("src-tauri/target/release/data/stamp-logs");
-const LOG_FILE = path.join(LOG_DIR, "session.log");
+// Contains %h%m%s on purpose: a status call that re-renders this template
+// would produce a different filename every second (and a different day after
+// midnight). The reported path must stay pinned to the open file handle.
+const LOG_TEMPLATE = path.join(LOG_DIR, "%Port", "%Y%M%D-%h%m%s.log");
+let logFile = "";
 const APP_PORT = "COM2";
 const PEER_PORT = "COM7";
 const STAMP = /^\[\d{2}:\d{2}:\d{2}\]\s/;
@@ -100,7 +104,8 @@ const child = spawn(EXE, [], {
 });
 child.unref();
 
-const readLog = () => (fs.existsSync(LOG_FILE) ? fs.readFileSync(LOG_FILE, "utf8") : "");
+const readLog = () =>
+  logFile && fs.existsSync(logFile) ? fs.readFileSync(logFile, "utf8") : "";
 /** Non-empty lines, with the stamp prefix stripped for checking content. */
 const contentLines = (text) =>
   text
@@ -150,11 +155,27 @@ try {
       await window.__TAURI_INTERNALS__.invoke("serial_resume", { sessionKey: k });
       return await window.__TAURI_INTERNALS__.invoke("serial_status", { sessionKey: k });
     },
-    [key, LOG_FILE],
+    [key, LOG_TEMPLATE],
   );
   out.push(`INFO status: ${JSON.stringify(status)}`);
   ok("端口已打开", status?.open === true, JSON.stringify(status));
-  await wait(900);
+  logFile = status?.logPath ?? "";
+  ok("日志路径已解析", !!logFile, logFile);
+  ok("报告的路径指向实际文件", !!logFile && fs.existsSync(logFile), logFile);
+
+  // The template contains %s: a naive status() would re-render it and return a
+  // different (nonexistent) filename on this second call.
+  await wait(1300);
+  const status2 = await page.evaluate(
+    async (k) => window.__TAURI_INTERNALS__.invoke("serial_status", { sessionKey: k }),
+    key,
+  );
+  ok(
+    "打开时日志路径不随时间漂移",
+    status2?.logPath === status?.logPath,
+    `${status?.logPath} -> ${status2?.logPath}`,
+  );
+  await wait(300);
 
   // ---- timestamps ON -------------------------------------------------------
   peerWrite("LINE-A\r\n\r\n  indented\r\nLINE-B\r\n");
@@ -168,6 +189,7 @@ try {
   ok("缩进内容时间戳在行首", onLines.some((l) => /^\[\d{2}:\d{2}:\d{2}\]\s\s+indented/.test(l)), onLines.join(" | "));
   ok("空行没有时间戳", !/\[\d{2}:\d{2}:\d{2}\]\s*\r?\n\r?\n/.test(on.split("LINE-A")[1]?.slice(0, 60) ?? ""));
   ok("日志里没有 ANSI 转义", !on.includes("\x1b"));
+  ok("同一天不插入日期锚点", !on.includes("日期变更"), on.slice(0, 120));
 
   // ---- toggle OFF while the port stays open --------------------------------
   await page.evaluate(async () => {

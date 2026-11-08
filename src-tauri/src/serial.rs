@@ -189,8 +189,19 @@ impl SerialManager {
 
     /// Directory to reveal for this session; created if it does not exist yet.
     pub fn log_dir(&self, id: &str) -> Result<PathBuf, String> {
-        let path = self
-            .log_path(id)
+        // Same reasoning as `status`: while a port is open the live handle's
+        // parent is the directory being written to. Re-resolving a template
+        // such as `logs/%Y%M%D/COM2.log` after midnight would otherwise open
+        // tomorrow's empty folder instead of today's data.
+        let live = self.get(id).ok().and_then(|s| {
+            let open = s.open.lock().ok()?.is_some();
+            if !open {
+                return None;
+            }
+            s.log_path.lock().ok()?.clone()
+        });
+        let path = live
+            .or_else(|| self.log_path(id))
             .ok_or_else(|| "该会话未开启日志记录".to_string())?;
         let dir = path
             .parent()
@@ -328,6 +339,7 @@ impl SerialManager {
             .spawn(move || {
                 let mut formatter = Formatter::new();
                 let mut log_stamper = LogStamper::new();
+                let mut last_log_date: Option<chrono::NaiveDate> = None;
                 let mut port = reader_port;
                 let mut buf = [0u8; 4096];
 
@@ -347,13 +359,10 @@ impl SerialManager {
 
                             if let Ok(mut guard) = log_file.lock() {
                                 if let Some(file) = guard.as_mut() {
+                                    let now = chrono::Local::now();
                                     // Plain text on purpose: no ANSI in log files.
                                     let stamp = if stamps.load(Ordering::SeqCst) {
-                                        format!(
-                                            "[{}] ",
-                                            chrono::Local::now().format("%H:%M:%S")
-                                        )
-                                        .into_bytes()
+                                        format!("[{}] ", now.format("%H:%M:%S")).into_bytes()
                                     } else {
                                         Vec::new()
                                     };
@@ -365,7 +374,14 @@ impl SerialManager {
                                     // Always run the stamper (with an empty
                                     // stamp when off) so its line state stays
                                     // correct when the switch is flipped.
-                                    let logged = log_stamper.process(&raw, &stamp, cr_mode);
+                                    let logged = log_chunk(
+                                        &mut log_stamper,
+                                        &mut last_log_date,
+                                        &now,
+                                        &raw,
+                                        &stamp,
+                                        cr_mode,
+                                    );
                                     let _ = file.write_all(&logged);
                                     // 115200 baud is ~11 KB/s: flushing per chunk is
                                     // cheap and keeps a crash from losing the tail.
@@ -500,19 +516,27 @@ impl SerialManager {
                 log_path: None,
             };
         };
-        // Resolve from the current settings first: the user may have changed the
-        // template since the port was opened. The cached path (from the open
-        // file handle) is only a fallback.
+        let open = session.open.lock().map(|o| o.is_some()).unwrap_or(false);
         let cached = session
             .log_path
             .lock()
             .ok()
             .and_then(|p| p.as_ref().map(|x| x.display().to_string()));
         let resolved = self.log_path(id).map(|p| p.display().to_string());
-        let log_path = resolved.or(cached);
+        // While open, the writer holds exactly one file handle: report that
+        // path. Re-rendering a template containing %Y%M%D/%h%m%s on every
+        // status call would otherwise produce a different (nonexistent) file
+        // name every second, and point "open log folder" at tomorrow's empty
+        // directory after midnight. When closed there is no handle, so keep
+        // reflecting template edits immediately.
+        let log_path = if open {
+            cached.or(resolved)
+        } else {
+            resolved.or(cached)
+        };
 
         SerialStatus {
-            open: session.open.lock().map(|o| o.is_some()).unwrap_or(false),
+            open,
             paused: session.paused.load(Ordering::SeqCst),
             alive: session.alive.load(Ordering::SeqCst),
             log_path,
@@ -948,6 +972,63 @@ impl LogStamper {
             self.end_line(out);
         }
     }
+
+    /// Flushes an unfinished line without a stamp and returns to a fresh line.
+    /// Used before writing a date marker, which is metadata rather than data.
+    fn finish_line(&mut self) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.append(&mut self.pending);
+        *self = Self::new();
+        out
+    }
+}
+
+/// A `--- 日期变更 ---` marker when the local date rolls over during one
+/// connection. Row timestamps are `[HH:MM:SS]`, so without this a log that
+/// spans midnight looks like time ran backwards, and a connection running over
+/// 24 hours produces duplicate timestamps with no way to tell the days apart.
+///
+/// `None` on the first chunk: the file name (or the reconnect marker) already
+/// records when the session started.
+fn date_anchor(
+    prev: Option<chrono::NaiveDate>,
+    now: chrono::NaiveDate,
+) -> Option<String> {
+    match prev {
+        Some(p) if p != now => Some(format!(
+            "\r\n--- 日期变更 {} ---\r\n",
+            now.format("%Y-%m-%d")
+        )),
+        _ => None,
+    }
+}
+
+/// Formats one received chunk for the log file, including the date marker on a
+/// midnight rollover. The clock is a parameter so this can be tested without
+/// touching the system time. `stamp` is empty when timestamps are disabled.
+fn log_chunk(
+    stamper: &mut LogStamper,
+    last_date: &mut Option<chrono::NaiveDate>,
+    now: &chrono::DateTime<chrono::Local>,
+    raw: &[u8],
+    stamp: &[u8],
+    cr_breaks_line: bool,
+) -> Vec<u8> {
+    let today = now.date_naive();
+    let prev = *last_date;
+    *last_date = Some(today);
+
+    let mut out = Vec::with_capacity(raw.len());
+    if !stamp.is_empty() {
+        if let Some(marker) = date_anchor(prev, today) {
+            // `finish_line` also resets the stamper, so the new day's first
+            // data line gets a fresh stamp at column 0.
+            out.extend_from_slice(&stamper.finish_line());
+            out.extend_from_slice(marker.as_bytes());
+        }
+    }
+    out.extend_from_slice(&stamper.process(raw, stamp, cr_breaks_line));
+    out
 }
 
 #[cfg(test)]
@@ -1098,5 +1179,89 @@ mod tests {
             stamped(&[row1.as_bytes(), row2.as_bytes()], T, true),
             format!("<T> {row1}<T> {row2}")
         );
+    }
+
+    #[test]
+    fn finish_line_flushes_held_bytes_and_resets() {
+        let mut s = LogStamper::new();
+        assert!(s.process(b"  ", T, true).is_empty());
+        assert_eq!(s.finish_line(), b"  ".to_vec());
+        assert_eq!(
+            String::from_utf8(s.process(b"x\r\n", T, true)).unwrap(),
+            "<T> x\r\n"
+        );
+    }
+
+    #[test]
+    fn date_anchor_only_appears_on_rollover() {
+        let d1 = chrono::NaiveDate::from_ymd_opt(2026, 11, 8).unwrap();
+        let d2 = chrono::NaiveDate::from_ymd_opt(2026, 11, 9).unwrap();
+        assert_eq!(date_anchor(None, d1), None, "first chunk needs no marker");
+        assert_eq!(date_anchor(Some(d1), d1), None, "same day needs no marker");
+        let marker = date_anchor(Some(d1), d2).unwrap();
+        assert!(marker.contains("2026-11-09"), "{marker}");
+        assert!(marker.starts_with("\r\n--- 日期变更"), "{marker}");
+        assert!(marker.ends_with("\r\n"), "{marker}");
+    }
+
+    /// Simulated clock: proves the whole path (marker + stamper reset) without
+    /// changing the machine's system time.
+    fn at(day: u32, h: u32, m: u32, s: u32) -> chrono::DateTime<chrono::Local> {
+        use chrono::TimeZone;
+        chrono::Local
+            .with_ymd_and_hms(2026, 11, day, h, m, s)
+            .unwrap()
+    }
+
+    fn feed_log(days: &[(u32, u32, u32, u32, &[u8])], stamp: &[u8]) -> String {
+        let mut st = LogStamper::new();
+        let mut last = None;
+        let mut out = Vec::new();
+        for (day, h, m, s, raw) in days {
+            let now = at(*day, *h, *m, *s);
+            out.extend_from_slice(&log_chunk(&mut st, &mut last, &now, raw, stamp, true));
+        }
+        String::from_utf8(out).unwrap()
+    }
+
+    #[test]
+    fn log_marks_midnight_and_keeps_stamping_the_new_day() {
+        let text = feed_log(
+            &[
+                (8, 23, 59, 58, b"before\r\n"),
+                (8, 23, 59, 59, b"last\r\n"),
+                (9, 0, 0, 1, b"after\r\n"),
+                (9, 0, 0, 2, b"more\r\n"),
+            ],
+            T,
+        );
+        assert_eq!(
+            text,
+            "<T> before\r\n<T> last\r\n\r\n--- 日期变更 2026-11-09 ---\r\n<T> after\r\n<T> more\r\n",
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn log_marker_closes_an_unfinished_line() {
+        let text = feed_log(
+            &[(8, 23, 59, 59, b"half"), (9, 0, 0, 1, b"next\r\n")],
+            T,
+        );
+        assert_eq!(
+            text,
+            "<T> half\r\n--- 日期变更 2026-11-09 ---\r\n<T> next\r\n",
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn log_no_marker_when_timestamps_are_off() {
+        let text = feed_log(
+            &[(8, 23, 59, 59, b"a\r\n"), (9, 0, 0, 1, b"b\r\n")],
+            &[],
+        );
+        assert_eq!(text, "a\r\nb\r\n", "{text}");
+        assert!(!text.contains("日期变更"));
     }
 }
