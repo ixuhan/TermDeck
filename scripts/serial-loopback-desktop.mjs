@@ -56,6 +56,17 @@ async function waitForCdp(timeoutMs = 30000) {
   throw new Error("CDP did not come up");
 }
 
+// COM2 <-> COM7 is a user-provided virtual pair. If another program (serial
+// monitor, vendor tool) holds the peer port, skip rather than report a false
+// failure — this suite tests our code, not somebody else's COM port.
+try {
+  peer("write", PEER_PORT, "");
+} catch {
+  console.log(`SKIP ${PEER_PORT} 被其他程序占用，跳过真实串口对测试`);
+  console.log("==== 0 passed, 0 failed (skipped) ====");
+  process.exit(0);
+}
+
 // Fresh workspace + DOM renderer so screen text is readable.
 fs.mkdirSync(DATA, { recursive: true });
 try {
@@ -219,7 +230,7 @@ try {
   await wait(300);
   ok("屏幕未出现错误条", (await page.locator(".error-bar").count()) === 0);
 } catch (err) {
-  out.push(`THROW ${err && err.message ? err.message : String(err)}`);
+  out.push(`FAIL 运行异常 :: ${err && err.message ? err.message : String(err)}`);
 } finally {
   console.log(out.join("\n"));
   const fails = out.filter((l) => l.startsWith("FAIL"));

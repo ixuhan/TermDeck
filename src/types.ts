@@ -199,6 +199,8 @@ export interface Settings {
   restoreScrollback: boolean;
   /** Poll the serial port list every second while the panel is open. */
   serialAutoRefresh: boolean;
+  /** Prepend `[HH:MM:SS]` to every output line in the terminal. */
+  lineTimestamps: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -215,4 +217,5 @@ export const DEFAULT_SETTINGS: Settings = {
   lazySpawn: true,
   restoreScrollback: true,
   serialAutoRefresh: false,
+  lineTimestamps: false,
 };

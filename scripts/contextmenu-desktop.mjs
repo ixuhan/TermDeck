@@ -66,6 +66,12 @@ try {
   const browser = await chromium.connectOverCDP("http://127.0.0.1:9222");
   const page = browser.contexts()[0].pages()[0];
   page.on("pageerror", (e) => out.push(`[pageerror] ${e.message}`));
+  await page.waitForSelector(".cmd-input", { timeout: 25000 });
+  await wait(1500);
+  // A fresh workspace has the directory panel collapsed; open it explicitly
+  // instead of relying on restored layout state.
+  const dirTab = page.locator(".dir-tab");
+  if (await dirTab.count()) await dirTab.first().click();
   await page.waitForSelector(".dir-panel", { timeout: 25000 });
   await wait(2500);
 
@@ -100,7 +106,7 @@ try {
 
   await page.screenshot({ path: "shots/ctx01-after-close.png" });
 } catch (err) {
-  out.push("THROW " + (err && err.message ? err.message : String(err)));
+  out.push("FAIL 运行异常 :: " + (err && err.message ? err.message : String(err)));
 } finally {
   console.log(out.join("\n"));
   const fails = out.filter((l) => l.startsWith("FAIL"));

@@ -5,14 +5,21 @@
  * the real app with TERMDECK_TEST_HIDDEN=1, which moves the window off-screen
  * and hides it so nothing appears on top of whatever the user is doing.
  *
+ * Exception: scrollback-test.mjs needs a live, on-screen WebView2 renderer —
+ * a hidden window never drains xterm's write queue — so that single suite
+ * shows a window briefly. Skip it with `node scripts/test-all.mjs quiet`
+ * when working in the foreground.
+ *
  *   node scripts/test-all.mjs            everything
  *   node scripts/test-all.mjs browser    only the dev-server suites
  *   node scripts/test-all.mjs desktop    only the real-app suites
+ *   node scripts/test-all.mjs quiet      all except the window-visible suite
  */
 import { spawn, execSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const BROWSER = [
+  "linestamp-test.mjs",
   "shot.mjs",
   "regress.mjs",
   "dirpanel-test.mjs",
@@ -20,6 +27,7 @@ const BROWSER = [
   "quickfix-test.mjs",
   "serialsession-test.mjs",
   "serial-defaults-test.mjs",
+  "timestamp-test.mjs",
 ];
 
 const DESKTOP = [
@@ -30,6 +38,7 @@ const DESKTOP = [
   "serial-real-desktop.mjs",
   "serial-logpath-desktop.mjs",
   "serial-loopback-desktop.mjs",
+  "timestamp-desktop.mjs",
 ];
 
 const mode = process.argv[2] ?? "all";
@@ -65,7 +74,7 @@ function run(script) {
 
 const results = [];
 
-if (mode === "all" || mode === "browser") {
+if (mode === "all" || mode === "browser" || mode === "quiet") {
   console.log("→ 启动 dev server（无窗口）");
   const dev = spawn("npm", ["run", "dev"], {
     cwd: process.cwd(),
@@ -102,8 +111,10 @@ if (mode === "all" || mode === "browser") {
   }
 }
 
-if (mode === "all" || mode === "desktop") {
-  for (const s of DESKTOP) {
+if (mode === "all" || mode === "desktop" || mode === "quiet") {
+  const suites =
+    mode === "quiet" ? DESKTOP.filter((s) => s !== "scrollback-test.mjs") : DESKTOP;
+  for (const s of suites) {
     killApp();
     await sleep(1500);
     process.stdout.write(`  ${s.padEnd(22)}`);
@@ -124,5 +135,9 @@ if (mode === "all" || mode === "desktop") {
 
 const totalPass = results.reduce((n, r) => n + r.passed, 0);
 const totalFail = results.reduce((n, r) => n + r.failed, 0);
-console.log(`\n==== 合计 ${totalPass} passed, ${totalFail} failed（窗口全程未显示） ====`);
+console.log(
+  `\n==== 合计 ${totalPass} passed, ${totalFail} failed` +
+    (mode === "quiet" ? "（窗口全程未显示）" : "") +
+    " ====",
+);
 process.exit(totalFail ? 1 : 0);

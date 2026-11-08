@@ -88,6 +88,14 @@ TermDeck 的做法是：**把输入层从 Shell 里抽出来自己实现**，这
 重开软件后用灰线分隔、把上次的输出原样回放，下面是新 Shell 的提示符。回放内容只用于显示，
 不会重新计入命令历史。空闲时每 3 秒落一次盘，关窗时再补一次。
 
+### 行首时间戳
+
+设置 → 终端显示 → 「每行开头显示时间」。开启后每行输出前插入 `[时:分:秒]`，串口收发排查时最有用。
+时间戳是在**数据写入终端前**插入的：跨数据包拆开的一行只加一次，空行不加，程序用 `\r` 重绘当前行
+（进度条、行编辑）也不会被塞进一条时间。全屏程序（vim / ssh）自动跳过，开关即时生效、无需重开会话。
+
+时间戳只影响屏幕显示，**不会写进串口日志文件**——日志保留设备原始字节。
+
 ### 自动更新
 
 安装版启动 8 秒后静默查一次新版本，有更新才提示；也可以在设置里手动检查。
@@ -251,16 +259,24 @@ data/
 ## 开发与测试
 
 ```bat
-scripts\test.bat              :: Rust 单测（模糊匹配、LIKE 转义、敏感掩码）
-npm run build                 :: 前端类型检查 + 构建
-node scripts\shot.mjs         :: 浏览器 Mock 套件（15 项断言）
-node scripts\regress.mjs      :: 验收反馈回归（12 项断言）
-node scripts\app-e2e.mjs      :: 真实应用端到端（需 Edge + WebView2 调试端口）
-node scripts\desktop-verify.mjs :: 关闭、历史持久化、目录持久化
+scripts\test.bat                 :: Rust 单测
+npm run build                    :: 前端类型检查 + 构建
+node scripts\test-all.mjs quiet  :: 全量回归，窗口全程不显示（推荐）
+node scripts\test-all.mjs        :: 全量回归，含唯一需要可见窗口的滚动缓冲套件
+node scripts\test-all.mjs browser:: 只跑浏览器 Mock 套件
+node scripts\test-all.mjs desktop: 只跑真实应用套件
+node scripts\linestamp-test.mjs  :: 时间戳流处理单测（无需 dev server）
 ```
 
-测试脚本用 Playwright 驱动系统自带的 Edge，不需要额外下载浏览器。桌面端的脚本通过
-`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` 接管真实窗口。
+测试脚本用 Playwright 驱动系统自带的 Edge，不需要额外下载浏览器。桌面端脚本通过
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` 接管真实窗口，
+并用 `TERMDECK_TEST_HIDDEN=1` 让窗口从创建起就隐藏、不抢焦点。
+
+唯一例外是 `scrollback-test.mjs`：隐藏窗口会挂起 xterm 的写入队列，屏幕内容读不到，
+因此它需要一次可见窗口。`quiet` 模式会跳过它，适合在前台工作时使用。
+
+`serial-loopback-desktop.mjs` 依赖用户自建的 COM2 ↔ COM7 虚拟串口对；对端被别的程序
+占用时会打印 `SKIP` 而不是报假失败。
 
 ---
 

@@ -6,6 +6,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { ipc } from "../ipc";
 import { ui } from "../focusBus";
 import { scrollbacks } from "../scrollbackBus";
+import { LineStamper, makeStamp } from "../linestamp";
 import { useStore } from "../store";
 import type { Session } from "../types";
 
@@ -137,6 +138,20 @@ export function TerminalView({ session, active }: { session: Session; active: bo
 
     scrollbacks.register(session.key, snapshot);
 
+    // Line timestamps are inserted into the stream, not painted over the
+    // buffer, so they survive scrolling and get captured by the snapshot.
+    // The stamper always runs (with an empty stamp when disabled) to keep its
+    // line-start state in sync, so toggling the setting takes effect at once.
+    const stamper = new LineStamper();
+    const writeOutput = (data: string) => {
+      const { lineTimestamps } = useStore.getState().settings;
+      // A full-screen app positions everything itself; injecting text there
+      // would shift its layout, so only the normal buffer gets stamped.
+      const stamp =
+        lineTimestamps && term.buffer.active.type !== "alternate" ? makeStamp() : "";
+      term.write(stamper.process(data, stamp));
+    };
+
     const dataSub = term.onData((data) => {
       void ipc.writePty(pid, data);
     });
@@ -152,13 +167,16 @@ export function TerminalView({ session, active }: { session: Session; active: bo
         if (saved) {
           term.write(saved);
           term.write(RESTORE_MARK);
+          // The separator ends the restored screen, so the new shell starts a
+          // clean line and gets its own timestamp.
+          stamper.reset();
         }
       }
       if (disposed) return;
 
       const off = await ipc.onPtyData(({ sessionId, data }) => {
         if (sessionId !== pid) return;
-        term.write(data);
+        writeOutput(data);
         scheduleSave();
       });
       if (disposed) {
@@ -169,7 +187,7 @@ export function TerminalView({ session, active }: { session: Session; active: bo
 
       const buffered = await ipc.attachSession(pid).catch(() => "");
       if (!disposed && buffered) {
-        term.write(buffered);
+        writeOutput(buffered);
         scheduleSave();
       }
     })();
@@ -182,6 +200,10 @@ export function TerminalView({ session, active }: { session: Session; active: bo
     if (typeof ns.onBufferChange === "function") {
       bufferSub = ns.onBufferChange(() => {
         const isAlt = term.buffer.active.type === "alternate";
+        // Switching buffers restores a screen at an unknown column; do not
+        // assume the next write starts a line.
+        if (isAlt) stamper.reset();
+        else stamper.markMidLine();
         const state = useStore.getState();
         if (state.manualLock) return;
         state.setMode(isAlt ? "passthrough" : "input");
