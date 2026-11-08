@@ -1,5 +1,16 @@
 # 变更记录
 
+### 会话项统一高度
+
+- 之前终端项 66px（title / meta / cwd 三行）、串口项静止 52px、hover 时 73px
+  （`serial-actions` 用 `display:none → inline-flex` 新增第三行），列表高低不齐
+- 现在 `.session-item` 固定 `height: 50px`（`box-sizing: border-box`），统一两行布局：
+  `cwd` 合并进 meta 行右侧（省略号 + title 提示，信息不丢）；
+  `serial-actions` 与 `session-restart` 改为绝对定位浮层，hover 用
+  `opacity` + `pointer-events` 显隐，永不占布局高度
+- 实测混合列表 50/50/50，hover 后仍 50/50/50，且无内容被裁切
+- 新增 6 条断言（高度一致、两种类型都参与、hover 不撑高、cwd 仍在）
+
 ### 文件目录自动刷新
 
 - 排序工具条加 `[手动 | 1s]` 分段控件，与串口面板一致；默认手动、设置持久化

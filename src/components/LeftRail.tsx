@@ -148,32 +148,34 @@ export function LeftRail() {
                   <span className="session-title">{s.title}</span>
                 )}
 
-                {s.kind === "serial" && s.serial ? (
-                  <span className="session-meta">
-                    {s.serial.config.dataBits}
-                    {s.serial.config.parity === "none"
-                      ? "N"
-                      : s.serial.config.parity === "odd"
-                        ? "O"
-                        : "E"}
-                    {s.serial.config.stopBits}
-                    {" · "}
-                    {s.alive ? "已连接" : s.serial.paused ? "已暂停（端口已释放）" : "未连接"}
-                  </span>
-                ) : (
-                  <span className="session-meta">
-                    {!s.spawned
-                      ? "未启动"
-                      : s.alive
-                        ? s.profile.executable.split(/[\\/]/).pop()
-                        : `已退出 · code ${s.exitCode ?? "?"}`}
-                  </span>
-                )}
-                {s.kind !== "serial" && s.cwd && (
-                  <span className="session-cwd" title={s.cwd}>
-                    {s.cwd}
-                  </span>
-                )}
+                <span className="session-meta">
+                  {s.kind === "serial" && s.serial ? (
+                    <span className="session-meta-text">
+                      {s.serial.config.dataBits}
+                      {s.serial.config.parity === "none"
+                        ? "N"
+                        : s.serial.config.parity === "odd"
+                          ? "O"
+                          : "E"}
+                      {s.serial.config.stopBits}
+                      {" · "}
+                      {s.alive ? "已连接" : s.serial.paused ? "已暂停（端口已释放）" : "未连接"}
+                    </span>
+                  ) : (
+                    <span className="session-meta-text">
+                      {!s.spawned
+                        ? "未启动"
+                        : s.alive
+                          ? s.profile.executable.split(/[\\/]/).pop()
+                          : `已退出 · code ${s.exitCode ?? "?"}`}
+                    </span>
+                  )}
+                  {s.kind !== "serial" && s.cwd && (
+                    <span className="session-cwd" title={s.cwd}>
+                      {s.cwd}
+                    </span>
+                  )}
+                </span>
                 {s.kind === "serial" && s.serial ? (
                   <span className="serial-actions">
                     <button

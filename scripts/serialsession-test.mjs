@@ -142,6 +142,28 @@ try {
   const toast = await page.locator(".toast").innerText().catch(() => "");
   ok("非法 HEX 被拒绝", toast.includes("HEX"), toast);
   ok("非法输入保留在输入框", (await input.inputValue()) === "ZZ");
+
+  // ---- uniform row height --------------------------------------------------
+  const heights = async () =>
+    page.locator(".session-item").evaluateAll((els) =>
+      els.map((e) => Math.round(e.getBoundingClientRect().height)),
+    );
+  const h0 = await heights();
+  ok("混合会话高度完全一致", h0.length >= 2 && new Set(h0).size === 1, h0.join(","));
+  const kinds = await page.locator(".session-item").evaluateAll((els) =>
+    els.map((e) => (e.querySelector(".serial-title") ? "serial" : "shell")),
+  );
+  ok("两种会话都参与比较", kinds.includes("serial") && kinds.includes("shell"), kinds.join(","));
+
+  await page.locator(".session-item").last().hover();
+  await page.waitForTimeout(350);
+  const h1 = await heights();
+  ok("hover 不撑高会话项", JSON.stringify(h1) === JSON.stringify(h0), h1.join(","));
+  const clipped = await page.locator(".session-item").evaluateAll((els) =>
+    els.some((e) => e.scrollHeight > e.clientHeight + 1),
+  );
+  ok("内容没有被固定高度裁切", !clipped);
+  ok("终端会话仍显示工作目录", (await page.locator(".session-item").first().locator(".session-cwd").count()) === 1);
 } finally {
   console.log(out.join("\n"));
   const fails = out.filter((l) => l.startsWith("FAIL"));
