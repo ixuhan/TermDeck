@@ -54,6 +54,11 @@ pub fn write_pty(
     if let Some(key) = as_serial(&session_id) {
         return app_state.serial.write(key, data.as_bytes());
     }
+    crate::logging::info(format!(
+        "write_pty -> {} ({:?})",
+        &session_id,
+        data.escape_default().to_string()
+    ));
     app_state
         .pty
         .write(&session_id, &data)

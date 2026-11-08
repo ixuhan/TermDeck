@@ -147,9 +147,14 @@ export function TerminalView({ session, active }: { session: Session; active: bo
       const { lineTimestamps } = useStore.getState().settings;
       // A full-screen app positions everything itself; injecting text there
       // would shift its layout, so only the normal buffer gets stamped.
+      // When timestamps are off there is nothing to stamp: write the bytes
+      // verbatim. Routing through the stamper anyway is a bug — it holds pure
+      // escape sequences (e.g. ConPTY's cursor-position query `ESC[6n`) in its
+      // pending buffer waiting for a printable char, so the terminal never
+      // sees the query, never answers it, and the shell stalls with no output.
       const stamp =
-        lineTimestamps && term.buffer.active.type !== "alternate" ? makeStamp() : "";
-      term.write(stamper.process(data, stamp));
+        lineTimestamps && term.buffer.active.type !== "alternate" ? makeStamp() : null;
+      term.write(stamp === null ? data : stamper.process(data, stamp));
     };
 
     const dataSub = term.onData((data) => {
@@ -300,6 +305,13 @@ export function TerminalView({ session, active }: { session: Session; active: bo
         const state = useStore.getState();
         if (state.settings.clickTerminalEntersPassthrough && state.mode !== "passthrough") {
           state.setMode("passthrough");
+        } else if (state.mode !== "passthrough") {
+          // The terminal is not accepting keyboard (input mode keeps focus on
+          // the command bar). xterm's own textarea still grabs focus on click,
+          // which would leave the app in a broken half-state: keys go to the
+          // PTY but the command bar looks idle. Yank focus back so typing
+          // always lands in the command bar unless pass-through is on.
+          ui.focusCommand();
         }
       }}
     >

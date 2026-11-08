@@ -193,6 +193,10 @@ impl PtyManager {
                 let mut buf = session.backlog.lock();
                 let out = std::mem::take(&mut *buf);
                 session.attached.store(true, Ordering::SeqCst);
+                crate::logging::info(format!(
+                    "pty attach {session_id}: replaying {} backlog bytes",
+                    out.len()
+                ));
                 out
             }
             None => String::new(),

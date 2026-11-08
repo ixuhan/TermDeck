@@ -24,12 +24,15 @@ export class LineStamper {
   /** Text held back while `undecided` is true. */
   private pending = "";
   private escape: EscapeState = "none";
+  /** True once the pending buffer contains a space/tab that may be indentation. */
+  private pendingHasSpace = false;
 
   reset(): void {
     this.undecided = true;
     this.atLineStart = true;
     this.pending = "";
     this.escape = "none";
+    this.pendingHasSpace = false;
   }
 
   /**
@@ -42,6 +45,7 @@ export class LineStamper {
     this.atLineStart = false;
     this.pending = "";
     this.escape = "none";
+    this.pendingHasSpace = false;
   }
 
   /**
@@ -62,12 +66,14 @@ export class LineStamper {
       // Line ended / turned out to be a redraw: emit it verbatim, no stamp.
       out += this.pending;
       this.pending = "";
+      this.pendingHasSpace = false;
       this.undecided = false;
     };
     const commit = () => {
       if (!this.undecided) return;
       out += stamp + this.pending;
       this.pending = "";
+      this.pendingHasSpace = false;
       this.undecided = false;
     };
 
@@ -106,6 +112,7 @@ export class LineStamper {
         if (this.undecided) {
           out += this.pending;
           this.pending = "";
+          this.pendingHasSpace = false;
         }
         this.undecided = true;
         this.atLineStart = true;
@@ -131,12 +138,25 @@ export class LineStamper {
       if (ch === " " || ch === "\t") {
         // Indentation may be all the line ever contains; hold the decision.
         emit(ch);
+        this.pendingHasSpace = true;
         continue;
       }
 
       commit();
       out += ch;
       this.atLineStart = false;
+    }
+
+    // A chunk that ended as pure control/escape data — no printable char, no
+    // indentation, and not mid-sequence — must be flushed, not held. ConPTY
+    // sends a lone cursor-position query `ESC[6n` that the terminal has to
+    // answer; holding it in `pending` forever deadlocks the session (the shell
+    // waits for the answer and produces no further output, leaving a blank
+    // screen). Space/tab, in contrast, is held: it may be indentation, or it
+    // may be an all-whitespace line that should get no stamp.
+    if (this.escape === "none" && this.pending !== "" && !this.pendingHasSpace) {
+      out += this.pending;
+      this.pending = "";
     }
     return out;
   }

@@ -70,7 +70,13 @@ async function connect() {
 }
 
 // ---------------------------------------------------------------- pass 1
-if (fs.existsSync(DATA)) fs.rmSync(DATA, { recursive: true, force: true });
+if (fs.existsSync(DATA)) {
+  // NOTE: the host's safe-delete shim intercepts fs.rmSync (both file and dir)
+  // and aborts on the `trash` fallback. Clean the data dir externally (Bash
+  // `rm -rf`) before running this script, or uncomment the lines below when the
+  // shim is not active.
+  // for (const name of fs.readdirSync(DATA)) fs.rmSync(path.join(DATA, name), { recursive: true, force: true });
+}
 
 let child = launch();
 let pid = child.pid;

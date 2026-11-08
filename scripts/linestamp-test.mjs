@@ -108,6 +108,21 @@ eq("颜色码后缩进仍加", feed(["\x1b[32m  hi"]), "<T> \x1b[32m  hi");
   eq("跨块 OSC 不算内容", a + b, "\x1b]0;title\x07\n<T> real");
 }
 
+// ---- a lone control sequence must pass through, never be held --------------
+{
+  // ConPTY's cursor-position query arrives as a single chunk and the shell
+  // waits for the answer before printing anything else. If the stamper holds
+  // it (no printable char yet), the terminal never sees it and never answers.
+  const st = new LineStamper();
+  eq("孤立 CSI 查询立即透传", st.process("\x1b[6n", S), "\x1b[6n");
+  eq("查询后内容正常加时间", st.process("PS> ", S), "<T> PS> ");
+}
+{
+  // Same for a lone OSC title sequence.
+  const st = new LineStamper();
+  eq("孤立 OSC 立即透传", st.process("\x1b]0;x\x07", S), "\x1b]0;x\x07");
+}
+
 // ---- stamp format -----------------------------------------------------------
 {
   const stamp = makeStamp(new Date(2026, 10, 8, 9, 5, 7));
