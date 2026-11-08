@@ -41,11 +41,15 @@ ok("#2 动态模式跟随 cd", crumb1.endsWith("docs"), crumb1);
 const rows1 = await rows();
 ok("#2b 内容已刷新", rows1.includes("BUILDING.md"), rows1.join(","));
 
-// ---- 3. 手动进入子目录 -----------------------------------------------------
+// ---- 3. 手动进入子目录（单击只选中，双击才进入）-----------------------------
+const beforeClick = await crumbs();
 await page.locator(".dir-row", { hasText: "images" }).first().click();
+await wait(500);
+ok("#3a 单击文件夹只选中不进入", (await crumbs()) === beforeClick, await crumbs());
+await page.locator(".dir-row", { hasText: "images" }).first().dblclick();
 await wait(800);
-ok("#3 单击文件夹进入", (await crumbs()).endsWith("images"));
-await page.locator(".dir-row.is-up").first().click();
+ok("#3 双击文件夹进入", (await crumbs()).endsWith("images"), await crumbs());
+await page.locator(".dir-row.is-up").first().dblclick();
 await wait(800);
 ok("#3b 返回上一级", (await crumbs()).endsWith("docs"));
 
@@ -76,7 +80,7 @@ ok("#6c 重新展开", (await page.locator(".dir-panel").count()) === 1);
 // ---- 7. 会话隔离 -----------------------------------------------------------
 // Give the active session a different browse path, then confirm the other
 // session is unaffected.
-await page.locator(".dir-row", { hasText: "src" }).first().click();
+await page.locator(".dir-row", { hasText: "src" }).first().dblclick();
 await wait(900);
 const pathA = await crumbs();
 await page.locator(".session-item").nth(0).click();

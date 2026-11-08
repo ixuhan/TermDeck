@@ -255,7 +255,6 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
           <div
             className="dir-row is-up"
             onDoubleClick={() => enterDir(listing.parent!)}
-            onClick={() => enterDir(listing.parent!)}
           >
             <span className="dir-icon">↑</span>
             <span className="dir-name">..</span>
@@ -280,12 +279,11 @@ export function DirectoryPanel({ session, active }: { session: Session; active: 
             key={e.path}
             className={`dir-row ${selected === e.path ? "is-selected" : ""}`}
             title={e.path}
-            onClick={() => {
-              setSelected(e.path);
-              if (e.isDir) enterDir(e.path);
-            }}
+            onClick={() => setSelected(e.path)}
             onDoubleClick={() => {
-              if (!e.isDir) void openFile(e.path);
+              // Explorer semantics: single click selects, double click opens.
+              if (e.isDir) enterDir(e.path);
+              else void openFile(e.path);
             }}
             onContextMenu={(ev) => {
               // Hand it to the shell so the menu is the same one Explorer shows,
